@@ -2,9 +2,10 @@ from flask import Flask, render_template, request
 import sqlite3
 from datetime import datetime
 import qrcode
-import os
+import io
+import base64
 
-app = Flask(__name__)
+app = Flask(_name_)
 
 # ---------------- DATABASE ----------------
 def init_db():
@@ -32,6 +33,19 @@ init_db()
 def index():
     return render_template('add.html')
 
+# ---------------- VIEW ALL ASSETS ----------------
+@app.route('/assets')
+def assets():
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM assets")
+    data = c.fetchall()
+
+    conn.close()
+
+    return render_template('assets.html', data=data)
+
 # ---------------- ADD ASSET ----------------
 @app.route('/add', methods=['POST'])
 def add():
@@ -54,23 +68,24 @@ def add():
     conn.commit()
     conn.close()
 
-    # ---------------- QR CODE (FIXED FOR WEB) ----------------
-    base_url = "https://your-app-name.onrender.com"  # CHANGE THIS AFTER DEPLOY
+    # ---------------- DYNAMIC QR CODE (NO FILE SAVE) ----------------
+    base_url = "https://your-app-name.onrender.com"  # CHANGE AFTER DEPLOY
     url = f"{base_url}/asset/{asset_id}"
 
     qr = qrcode.make(url)
 
-    if not os.path.exists("static"):
-        os.makedirs("static")
+    buffer = io.BytesIO()
+    qr.save(buffer, format="PNG")
 
-    qr_path = f"static/qr_{asset_id}.png"
-    qr.save(qr_path)
+    img_str = base64.b64encode(buffer.getvalue()).decode()
 
     return f"""
     <h2>Asset Added Successfully!</h2>
     <p>Scan this QR:</p>
-    <img src='/{qr_path}' width='200'>
-    <br><a href='/'>Go Back</a>
+    <img src="data:image/png;base64,{img_str}" width="200">
+    <br><br>
+    <a href='/'>⬅️ Back</a> | 
+    <a href='/assets'>📋 View All Assets</a>
     """
 
 # ---------------- VIEW ASSET ----------------
@@ -94,5 +109,5 @@ def asset(id):
     return render_template('asset.html', data=data, scan=new_count)
 
 # ---------------- RUN SERVER ----------------
-if __name__ == '__main__':
+if _name_ == '_main_':
     app.run()
