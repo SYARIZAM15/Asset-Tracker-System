@@ -7,23 +7,21 @@
 
 <h2>Asset Details</h2>
 
-<!-- 🔘 NAVIGATION -->
-<a href="/">⬅️ Back to Add</a> |
-<a href="/assets">📋 View All Assets</a>
+<a href="/">⬅️ Back</a> | 
+<a href="/assets">📋 All Assets</a>
 
 <br><br>
 
-<!-- 📄 DETAILS -->
 <p><b>CPU Name:</b> {{ data[1] }}</p>
 <p><b>Serial Number:</b> {{ data[2] }}</p>
 
 <p><b>Status:</b>
 {% if data[3] == "Working" %}
-<span style="color:green;">🟢 Working</span>
+    <span style="color:green;">🟢 Working</span>
 {% elif data[3] == "Faulty" %}
-<span style="color:red;">🔴 Faulty</span>
+    <span style="color:red;">🔴 Faulty</span>
 {% else %}
-<span style="color:orange;">🟡 Maintenance</span>
+    <span style="color:orange;">🟡 Maintenance</span>
 {% endif %}
 </p>
 
