@@ -5,7 +5,7 @@ import qrcode
 import io
 import base64
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # ---------------- DATABASE ----------------
 def init_db():
@@ -109,5 +109,5 @@ def asset(id):
     return render_template('asset.html', data=data, scan=new_count)
 
 # ---------------- RUN SERVER ----------------
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run()
