@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request
-from openpyxl import Workbook, load_workbook
 import sqlite3
 from datetime import datetime
 import qrcode
@@ -28,34 +27,6 @@ def init_db():
 
 init_db()
 
-# ---------------- EXCEL SETUP ----------------
-EXCEL_FILE = "assets.xlsx"
-
-if not os.path.exists(EXCEL_FILE):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Assets"
-    ws.append(["CPU Name", "Serial Number", "Status", "Last Updated"])
-    wb.save(EXCEL_FILE)
-
-# ---------------- SAFE EXCEL FUNCTION ----------------
-def save_to_excel(cpu_name, serial, status, now):
-    # Always ensure file exists
-    if not os.path.exists(EXCEL_FILE):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Assets"
-        ws.append(["CPU Name", "Serial Number", "Status", "Last Updated"])
-        wb.save(EXCEL_FILE)
-
-    # Load + append safely
-    wb = load_workbook(EXCEL_FILE)
-    ws = wb.active
-
-    ws.append([cpu_name, serial, status, now])
-
-    wb.save(EXCEL_FILE)
-
 # ---------------- HOME PAGE ----------------
 @app.route('/')
 def index():
@@ -83,11 +54,10 @@ def add():
     conn.commit()
     conn.close()
 
-    # ---------------- SAVE TO EXCEL (FIXED) ----------------
-    save_to_excel(cpu_name, serial, status, now)
+    # ---------------- QR CODE (FIXED FOR WEB) ----------------
+    base_url = "https://your-app-name.onrender.com"  # CHANGE THIS AFTER DEPLOY
+    url = f"{base_url}/asset/{asset_id}"
 
-    # ---------------- QR CODE ----------------
-    url = f"http://192.168.200.117:5000/asset/{asset_id}"
     qr = qrcode.make(url)
 
     if not os.path.exists("static"):
@@ -125,4 +95,4 @@ def asset(id):
 
 # ---------------- RUN SERVER ----------------
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run()
