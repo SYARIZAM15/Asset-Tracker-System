@@ -1,0 +1,20 @@
+<h2>Asset Tracker System</h2>
+
+<form action="/add" method="POST">
+
+    <label>CPU Name:</label><br>
+    <input type="text" name="cpu_name" required><br><br>
+
+    <label>Serial Number:</label><br>
+    <input type="text" name="serial" required><br><br>
+
+    <label>Status:</label><br>
+    <select name="status">
+        <option>Working</option>
+        <option>Faulty</option>
+        <option>Maintenance</option>
+    </select><br><br>
+
+    <button type="submit">Add Asset</button>
+
+</form>
