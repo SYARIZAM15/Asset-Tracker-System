@@ -69,7 +69,7 @@ def add():
     conn.close()
 
     # ---------------- DYNAMIC QR CODE (NO FILE SAVE) ----------------
-    base_url = "https://asset-tracker-system.onrender.com"  # CHANGE AFTER DEPLOY
+    base_url = "https://asset-tracker-system-o5zl.onrender.com"  # CHANGE AFTER DEPLOY
     url = f"{base_url}/asset/{asset_id}"
 
     qr = qrcode.make(url)
