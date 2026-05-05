@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
 from datetime import datetime
 import qrcode
@@ -7,107 +7,91 @@ import base64
 
 app = Flask(__name__)
 
-# ---------------- DATABASE ----------------
-def init_db():
+def get_db_connection():
     conn = sqlite3.connect('database.db')
-    c = conn.cursor()
+    conn.row_factory = sqlite3.Row  # This allows us to use column names like row['cpu_name']
+    return conn
 
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS assets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cpu_name TEXT,
-        serial_number TEXT,
-        status TEXT,
-        scan_count INTEGER DEFAULT 0,
-        last_updated TEXT
-    )
+def init_db():
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cpu_name TEXT NOT NULL,
+            serial_number TEXT NOT NULL,
+            status TEXT NOT NULL,
+            scan_count INTEGER DEFAULT 0,
+            last_updated TEXT
+        )
     ''')
-
     conn.commit()
     conn.close()
 
 init_db()
 
-# ---------------- HOME PAGE ----------------
 @app.route('/')
 def index():
     return render_template('add.html')
 
-# ---------------- VIEW ALL ASSETS ----------------
 @app.route('/assets')
 def assets():
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM assets")
-    data = c.fetchall()
-
+    search = request.args.get('search')
+    conn = get_db_connection()
+    if search:
+        # Search by Serial Number
+        data = conn.execute("SELECT * FROM assets WHERE serial_number LIKE ?", ('%' + search + '%',)).fetchall()
+    else:
+        data = conn.execute("SELECT * FROM assets ORDER BY id DESC").fetchall()
     conn.close()
-
     return render_template('assets.html', data=data)
 
-# ---------------- ADD ASSET ----------------
 @app.route('/add', methods=['POST'])
 def add():
     cpu_name = request.form['cpu_name']
     serial = request.form['serial']
     status = request.form['status']
-
     now = datetime.now().strftime("%d-%m-%Y %H:%M")
 
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-
-    c.execute("""
-        INSERT INTO assets (cpu_name, serial_number, status, last_updated)
-        VALUES (?, ?, ?, ?)
-    """, (cpu_name, serial, status, now))
-
-    asset_id = c.lastrowid
-
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO assets (cpu_name, serial_number, status, last_updated) VALUES (?, ?, ?, ?)",
+                   (cpu_name, serial, status, now))
+    asset_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    
+    return redirect(url_for('show_qr', id=asset_id))
 
-    # ---------------- DYNAMIC QR CODE (NO FILE SAVE) ----------------
-    base_url = "https://asset-tracker-system-o5zl.onrender.com"  # CHANGE AFTER DEPLOY
-    url = f"{base_url}/asset/{asset_id}"
-
+@app.route('/qr/<int:id>')
+def show_qr(id):
+    # Important: Change this URL to your actual Render URL
+    base_url = "https://asset-tracker-system-o5zl.onrender.com" 
+    url = f"{base_url}/asset/{id}"
+    
     qr = qrcode.make(url)
-
     buffer = io.BytesIO()
     qr.save(buffer, format="PNG")
-
     img_str = base64.b64encode(buffer.getvalue()).decode()
+    
+    return render_template('qr_display.html', img_str=img_str, id=id)
 
-    return f"""
-    <h2>Asset Added Successfully!</h2>
-    <p>Scan this QR:</p>
-    <img src="data:image/png;base64,{img_str}" width="200">
-    <br><br>
-    <a href='/'>⬅️ Back</a> | 
-    <a href='/assets'>📋 View All Assets</a>
-    """
-
-# ---------------- VIEW ASSET ----------------
 @app.route('/asset/<int:id>')
 def asset(id):
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM assets WHERE id=?", (id,))
-    data = c.fetchone()
+    conn = get_db_connection()
+    data = conn.execute("SELECT * FROM assets WHERE id=?", (id,)).fetchone()
 
     if not data:
-        return "Asset not found"
+        return "Asset not found", 404
 
-    new_count = data[4] + 1
-
-    c.execute("UPDATE assets SET scan_count=? WHERE id=?", (new_count, id))
+    new_count = data['scan_count'] + 1
+    conn.execute("UPDATE assets SET scan_count=? WHERE id=?", (new_count, id))
     conn.commit()
+    
+    # Re-fetch data to show updated count
+    data = conn.execute("SELECT * FROM assets WHERE id=?", (id,)).fetchone()
     conn.close()
 
-    return render_template('asset.html', data=data, scan=new_count)
+    return render_template('asset.html', data=data)
 
-# ---------------- RUN SERVER ----------------
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
