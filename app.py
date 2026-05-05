@@ -6,21 +6,31 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'jpkn_secret_key_2026'
 
-# Connects to your PostgreSQL database on Render
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+# DATABASE CONNECTION LOGIC
+# This automatically fixes the 'postgres://' vs 'postgresql://' issue
+uri = os.getenv("DATABASE_URL")
+if uri and uri.startswith("postgres://"):
+    uri = uri.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Safe Mode: Helps prevent "Internal Server Error" by checking connection heartbeat
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+}
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# User Model
+# Models
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
 
-# Hardware Model for JPKN Assets
 class Asset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     model = db.Column(db.String(100))
@@ -32,7 +42,7 @@ class Asset(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# FIX: Home Route (Redirects to dashboard if logged in)
+# Routes
 @app.route('/')
 def home():
     if current_user.is_authenticated:
@@ -44,7 +54,6 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        # Default JPKN Credentials
         if username == 'admin' and password == 'jpkn123':
             user = User.query.filter_by(username=username).first()
             if not user:
@@ -54,7 +63,7 @@ def login():
             login_user(user)
             return redirect(url_for('assets'))
         else:
-            flash('Login Failed. Check credentials.')
+            flash('Invalid JPKN Credentials')
     return render_template('login.html')
 
 @app.route('/assets')
@@ -86,5 +95,5 @@ def logout():
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        db.create_all() # This creates the tables in PostgreSQL automatically
     app.run(debug=True)
