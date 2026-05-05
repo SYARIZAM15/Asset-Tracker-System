@@ -7,27 +7,40 @@
 <body class="bg-light">
     <div class="container mt-5">
         <div class="card shadow-sm mx-auto" style="max-width: 600px;">
-            <div class="card-header bg-warning"><h5>📝 Edit Asset: {{ asset[1] }}</h5></div>
-            <div class="card-body">
-                <form action="/edit/{{ asset[0] }}" method="POST">
-                    <div class="mb-3"><label>Status</label>
+            <div class="card-header bg-warning text-center"><h5>📝 Edit Asset: {{ asset.cpu_name }}</h5></div>
+            <div class="card-body p-4">
+                <form action="/edit/{{ asset.id }}" method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label class="form-label">RAM Size</label><input type="text" name="ram" value="{{ asset.ram_size }}" class="form-control"></div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Storage</label><input type="text" name="storage" value="{{ asset.storage_type }}" class="form-control"></div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Location</label><input type="text" name="location" value="{{ asset.location }}" class="form-control"></div>
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
                         <select name="status" class="form-select">
-                            <option {% if asset[3] == 'Working' %}selected{% endif %}>Working</option>
-                            <option {% if asset[3] == 'Faulty' %}selected{% endif %}>Faulty</option>
-                            <option {% if asset[3] == 'Maintenance' %}selected{% endif %}>Maintenance</option>
+                            <option {% if asset.status == 'Working' %}selected{% endif %}>Working</option>
+                            <option {% if asset.status == 'Faulty' %}selected{% endif %}>Faulty</option>
+                            <option {% if asset.status == 'Maintenance' %}selected{% endif %}>Maintenance</option>
                         </select>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3"><label>RAM Size</label><input type="text" name="ram" value="{{ asset[4] }}" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label>Storage</label><input type="text" name="storage" value="{{ asset[5] }}" class="form-control"></div>
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold">Maintenance Category</label>
+                        <select name="category" class="form-select">
+                            <option>Hardware Upgrade</option>
+                            <option>Software Repair</option>
+                            <option>Cabling / Network</option>
+                            <option>Preventive Maintenance</option>
+                        </select>
                     </div>
-                    <div class="mb-3"><label>Location</label><input type="text" name="location" value="{{ asset[6] }}" class="form-control"></div>
-                    <div class="mb-3"><label>Add Maintenance Log (History)</label>
-                        <textarea name="maintenance_logs" class="form-control" rows="3" placeholder="Describe repair or upgrade done..."></textarea>
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold">Action Taken (Log History)</label>
+                        <textarea name="maintenance_log" class="form-control" rows="3" placeholder="e.g. Upgraded RAM to 16GB, cleaned CPU fan"></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Update Asset</button>
+                    <button type="submit" class="btn btn-primary w-100 mt-2">Update Asset & Save Log</button>
                 </form>
             </div>
+            <div class="card-footer text-center"><a href="/assets" class="btn btn-sm btn-link text-secondary">Cancel</a></div>
         </div>
     </div>
 </body>
