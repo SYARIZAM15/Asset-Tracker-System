@@ -129,7 +129,7 @@ def edit(id):
 @app.route('/qr/<int:id>')
 @login_required
 def show_qr(id):
-    base_url = "https://asset-tracker-system-o5zl.onrender.com" 
+    base_url = "postgresql://asset_tracker_3bs9_user:F8l9wOiXLkqFX3KTK2vYDY6GOXImjtIi@dpg-d7slhk28qa3s73eoh0og-a/asset_tracker_3bs9" 
     qr = qrcode.make(f"{base_url}/asset/{id}")
     buf = io.BytesIO()
     qr.save(buf, format="PNG")
