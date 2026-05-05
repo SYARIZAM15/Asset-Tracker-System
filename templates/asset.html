@@ -1,4 +1,4 @@
-<asset html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8"><title>Asset Info</title>
@@ -9,16 +9,19 @@
         <div class="card shadow mx-auto" style="max-width: 500px;">
             <div class="card-header bg-dark text-white"><h5>Asset Details</h5></div>
             <div class="card-body">
-                <p><strong>Name:</strong> {{ data[1] }} | <strong>S/N:</strong> {{ data[2] }}</p>
-                <p><strong>RAM:</strong> {{ data[4] }} | <strong>Storage:</strong> {{ data[5] }}</p>
-                <p><strong>Location:</strong> {{ data[6] }}</p>
+                <!-- Use keys like 'cpu_name' and 'serial_number' -->
+                <p><strong>Name:</strong> {{ data.cpu_name }} | <strong>S/N:</strong> {{ data.serial_number }}</p>
+                <p><strong>RAM:</strong> {{ data.ram_size }} | <strong>Storage:</strong> {{ data.storage_type }}</p>
+                <p><strong>Location:</strong> {{ data.location }}</p>
                 <hr>
                 <h6>📜 Maintenance History</h6>
-                <div class="bg-light p-2 border rounded" style="white-space: pre-wrap; font-size: 0.85rem;">{{ data[7] if data[7] else 'No logs yet' }}</div>
+                <div class="bg-light p-2 border rounded" style="white-space: pre-wrap; font-size: 0.85rem;">
+                    {{ data.maintenance_logs if data.maintenance_logs else 'No logs yet' }}
+                </div>
             </div>
             <div class="card-footer d-flex justify-content-between">
                 <a href="/assets" class="btn btn-sm btn-secondary">List</a>
-                <a href="/edit/{{ data[0] }}" class="btn btn-sm btn-warning">Edit/Log</a>
+                <a href="/edit/{{ data.id }}" class="btn btn-sm btn-warning">Edit/Log</a>
             </div>
         </div>
     </div>
