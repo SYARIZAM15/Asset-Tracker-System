@@ -1,15 +1,54 @@
-<!-- Inside templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JPKN Asset Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
 <body>
+
     <div class="sidebar">
-        <div class="logo">
-            <h3>JPKN Assets</h3>
-        </div>
-        <a href="{{ url_for('assets') }}"><i class="fas fa-home"></i> Home</a>
-        <a href="{{ url_for('add_asset') }}"><i class="fas fa-plus"></i> Add New</a>
-        <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <div class="logo">JPKN ASSETS</div>
+        <a href="{{ url_for('assets') }}" class="active">
+            <i class="fas fa-house"></i> Home
+        </a>
+        <a href="{{ url_for('add_asset') }}">
+            <i class="fas fa-plus"></i> Add Hardware
+        </a>
+        <a href="{{ url_for('logout') }}" style="margin-top: auto; margin-bottom: 20px;">
+            <i class="fas fa-right-from-bracket"></i> Logout
+        </a>
     </div>
 
     <div class="main-content">
-        {% block content %}{% endblock %}
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Sandakan Inventory</h1>
+            <a href="{{ url_for('add_asset') }}" class="btn-add">+ Add Hardware</a>
+        </div>
+        
+        <table class="asset-table">
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Serial Number</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for asset in assets %}
+                <tr>
+                    <td>{{ asset.model }}</td>
+                    <td>{{ asset.serial_number }}</td>
+                    <td>{{ asset.location }}</td>
+                    <td>{{ asset.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
+
 </body>
+</html>
