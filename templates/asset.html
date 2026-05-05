@@ -1,30 +1,184 @@
-<asset html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asset Details</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container mt-5">
-        <div class="card shadow mx-auto" style="max-width: 450px;">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0">Asset Information</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>CPU Name:</strong> {{ data['cpu_name'] }}</p>
-                <p><strong>Serial Number:</strong> <code>{{ data['serial_number'] }}</code></p>
-                <p><strong>Status:</strong> {{ data['status'] }}</p>
-                <hr>
-                <p class="small text-muted mb-1">Scan History: {{ scan }} times</p>
-                <p class="small text-muted">Last Logged: {{ data['last_updated'] }}</p>
-            </div>
-            <div class="card-footer d-flex justify-content-between">
-                <a href="/assets" class="btn btn-sm btn-secondary">Back to List</a>
-                <a href="/" class="btn btn-sm btn-primary">Home</a>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
+from flask import Flask, render_template, request, redirect, url_for, send_file
+import sqlite3
+import os
+from datetime import datetime
+import qrcode
+import io
+import base64
+import pandas as pd
+
+app = Flask(__name__)
+
+# DATABASE CONFIGURATION
+DB_URL = os.environ.get('DATABASE_URL') 
+
+def get_db_connection():
+    if DB_URL:
+        import psycopg2
+        from psycopg2.extras import DictCursor
+        conn = psycopg2.connect(DB_URL, sslmode='require')
+        return conn
+    else:
+        conn = sqlite3.connect('database.db')
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def init_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Using SERIAL for Postgres and AUTOINCREMENT logic for SQLite
+    id_type = "SERIAL PRIMARY KEY" if DB_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    
+    cur.execute(f'''
+        CREATE TABLE IF NOT EXISTS assets (
+            id {id_type},
+            cpu_name TEXT NOT NULL,
+            serial_number TEXT NOT NULL,
+            status TEXT NOT NULL,
+            ram_size TEXT,
+            storage_type TEXT,
+            location TEXT,
+            maintenance_logs TEXT,
+            scan_count INTEGER DEFAULT 0,
+            last_updated TEXT
+        )
+    ''')
+    conn.commit()
+    cur.close()
+    conn.close()
+
+init_db()
+
+@app.route('/')
+def index():
+    return render_template('add.html')
+
+@app.route('/assets')
+def assets():
+    search = request.args.get('search')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Dashboard Stats
+    cur.execute("SELECT COUNT(*) FROM assets")
+    total = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM assets WHERE status='Working'")
+    working = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM assets WHERE status='Faulty'")
+    faulty = cur.fetchone()[0]
+    
+    query = "SELECT * FROM assets"
+    params = []
+    if search:
+        query += " WHERE serial_number LIKE %s OR cpu_name LIKE %s" if DB_URL else " WHERE serial_number LIKE ? OR cpu_name LIKE ?"
+        params = [f'%{search}%', f'%{search}%']
+    
+    query += " ORDER BY id DESC"
+    cur.execute(query, params)
+    data = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    return render_template('assets.html', data=data, total=total, working=working, faulty=faulty)
+
+@app.route('/add', methods=['POST'])
+def add():
+    cpu_name = request.form['cpu_name']
+    serial = request.form['serial']
+    status = request.form['status']
+    ram = request.form['ram']
+    storage = request.form['storage']
+    location = request.form['location']
+    now = datetime.now().strftime("%d-%m-%Y %H:%M")
+    
+    placeholder = "%s, %s, %s, %s, %s, %s, %s" if DB_URL else "?, ?, ?, ?, ?, ?, ?"
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(f"""
+        INSERT INTO assets (cpu_name, serial_number, status, ram_size, storage_type, location, last_updated)
+        VALUES ({placeholder})
+    """, (cpu_name, serial, status, ram, storage, location, now))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('assets'))
+
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit(id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    if request.method == 'POST':
+        status = request.form['status']
+        ram = request.form['ram']
+        storage = request.form['storage']
+        location = request.form['location']
+        new_log = request.form['maintenance_logs']
+        now = datetime.now().strftime("%d-%m-%Y %H:%M")
+
+        placeholder = "%s" if DB_URL else "?"
+        cur.execute(f"SELECT maintenance_logs FROM assets WHERE id = {placeholder}", (id,))
+        old_logs = cur.fetchone()[0] or ""
+        updated_logs = f"{old_logs}\n[{now}] {new_log}" if new_log else old_logs
+
+        update_query = """
+            UPDATE assets 
+            SET status=%s, ram_size=%s, storage_type=%s, location=%s, maintenance_logs=%s, last_updated=%s
+            WHERE id=%s
+        """ if DB_URL else """
+            UPDATE assets 
+            SET status=?, ram_size=?, storage_type=?, location=?, maintenance_logs=?, last_updated=?
+            WHERE id=?
+        """
+        cur.execute(update_query, (status, ram, storage, location, updated_logs, now, id))
+        conn.commit()
+        return redirect(url_for('assets'))
+
+    placeholder = "%s" if DB_URL else "?"
+    cur.execute(f"SELECT * FROM assets WHERE id = {placeholder}", (id,))
+    asset = cur.fetchone()
+    cur.close()
+    conn.close()
+    return render_template('edit.html', asset=asset)
+
+@app.route('/delete/<int:id>')
+def delete(id):
+    placeholder = "%s" if DB_URL else "?"
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(f"DELETE FROM assets WHERE id = {placeholder}", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('assets'))
+
+@app.route('/qr/<int:id>')
+def show_qr(id):
+    base_url = "https://asset-tracker-system-o5zl.onrender.com" 
+    url = f"{base_url}/asset/{id}"
+    qr = qrcode.make(url)
+    buffer = io.BytesIO()
+    qr.save(buffer, format="PNG")
+    img_str = base64.b64encode(buffer.getvalue()).decode()
+    return render_template('qr_display.html', img_str=img_str, id=id)
+
+@app.route('/asset/<int:id>')
+def asset(id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    placeholder = "%s" if DB_URL else "?"
+    cur.execute(f"SELECT * FROM assets WHERE id={placeholder}", (id,))
+    data = cur.fetchone()
+    
+    # Handle scan count update
+    new_count = data[8] + 1 # scan_count index
+    cur.execute(f"UPDATE assets SET scan_count={placeholder} WHERE id={placeholder}", (new_count, id))
+    conn.commit()
+    
+    cur.close()
+    conn.close()
+    return render_template('asset.html', data=data)
+
+if __name__ == '__main__':
+    app.run()
