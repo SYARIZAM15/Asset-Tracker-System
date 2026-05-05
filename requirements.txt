@@ -1,9 +1,4 @@
 flask
 flask-sqlalchemy
-psycopg2-binary
 flask-login
-qrcode
-pillow
 gunicorn
-pandas
-openpyxl
