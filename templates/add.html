@@ -1,38 +1,49 @@
-<!DOCTYPE html>
-<html>
+<add html>
+<html lang="en">
 <head>
-    <title>Asset Tracker</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Asset - JPKN Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="bg-light">
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">➕ Register New Asset</h4>
+                    </div>
+                    <div class="card-body">
+                        <form action="/add" method="POST">
+                            <div class="mb-3">
+                                <label class="form-label font-weight-bold">CPU / Model Name:</label>
+                                <input type="text" name="cpu_name" class="form-control" placeholder="e.g. Dell Optiplex 3080" required>
+                            </div>
 
-<h2>Asset Tracker System</h2>
+                            <div class="mb-3">
+                                <label class="form-label">Serial Number:</label>
+                                <input type="text" name="serial" class="form-control" placeholder="Enter S/N" required>
+                            </div>
 
-<!-- 🔘 NAVIGATION -->
-<a href="/assets">
-    <button>📋 View All Assets</button>
-</a>
+                            <div class="mb-4">
+                                <label class="form-label">Current Status:</label>
+                                <select name="status" class="form-select">
+                                    <option value="Working">🟢 Working</option>
+                                    <option value="Faulty">🔴 Faulty</option>
+                                    <option value="Maintenance">🟡 Maintenance</option>
+                                </select>
+                            </div>
 
-<br><br>
-
-<!-- 📝 FORM -->
-<form action="/add" method="POST">
-
-    <label>CPU Name:</label><br>
-    <input type="text" name="cpu_name" required><br><br>
-
-    <label>Serial Number:</label><br>
-    <input type="text" name="serial" required><br><br>
-
-    <label>Status:</label><br>
-    <select name="status">
-        <option>Working</option>
-        <option>Faulty</option>
-        <option>Maintenance</option>
-    </select><br><br>
-
-    <button type="submit">➕ Add Asset</button>
-
-</form>
-
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success">Save Asset & Generate QR</button>
+                                <a href="/assets" class="btn btn-outline-secondary">Cancel & View All</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
