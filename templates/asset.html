@@ -7,21 +7,25 @@
 <body class="bg-light">
     <div class="container mt-5">
         <div class="card shadow mx-auto" style="max-width: 500px;">
-            <div class="card-header bg-dark text-white"><h5>Asset Details</h5></div>
-            <div class="card-body">
-                <!-- Use keys like 'cpu_name' and 'serial_number' -->
+            <div class="card-header bg-dark text-white text-center">
+                <h5 class="mb-0">🖥️ Asset Details</h5>
+            </div>
+            <div class="card-body p-4">
                 <p><strong>Name:</strong> {{ data.cpu_name }} | <strong>S/N:</strong> {{ data.serial_number }}</p>
                 <p><strong>RAM:</strong> {{ data.ram_size }} | <strong>Storage:</strong> {{ data.storage_type }}</p>
                 <p><strong>Location:</strong> {{ data.location }}</p>
                 <hr>
                 <h6>📜 Maintenance History</h6>
-                <div class="bg-light p-2 border rounded" style="white-space: pre-wrap; font-size: 0.85rem;">
-                    {{ data.maintenance_logs if data.maintenance_logs else 'No logs yet' }}
+                <div class="bg-light p-3 border rounded mb-3" style="white-space: pre-wrap; font-size: 0.9rem; min-height: 50px;">
+                    {{ data.maintenance_logs if data.maintenance_logs else 'No history recorded yet.' }}
+                </div>
+                <div class="text-center">
+                    <small class="text-muted">Total Scans: {{ data.scan_count }}</small>
                 </div>
             </div>
             <div class="card-footer d-flex justify-content-between">
-                <a href="/assets" class="btn btn-sm btn-secondary">List</a>
-                <a href="/edit/{{ data.id }}" class="btn btn-sm btn-warning">Edit/Log</a>
+                <a href="/assets" class="btn btn-sm btn-secondary">📋 View List</a>
+                <a href="/edit/{{ data.id }}" class="btn btn-sm btn-warning">🛠️ Edit/Log</a>
             </div>
         </div>
     </div>
