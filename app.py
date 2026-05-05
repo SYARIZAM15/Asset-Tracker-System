@@ -9,7 +9,7 @@ import os
 
 app = Flask(__name__)
 
-# Use an absolute path for the database to avoid errors on Render
+# Use an absolute path for the database to ensure it works on Render's server
 db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'database.db')
 
 def get_db_connection():
@@ -32,7 +32,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Initialize DB on startup
+# Initialize Database
 init_db()
 
 @app.route('/')
@@ -44,7 +44,7 @@ def assets():
     search = request.args.get('search')
     conn = get_db_connection()
     
-    # Get stats for the dashboard
+    # Calculate Dashboard Stats
     total = conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
     working = conn.execute("SELECT COUNT(*) FROM assets WHERE status='Working'").fetchone()[0]
     faulty = conn.execute("SELECT COUNT(*) FROM assets WHERE status='Faulty'").fetchone()[0]
@@ -72,30 +72,39 @@ def add():
     asset_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    
     return redirect(url_for('show_qr', id=asset_id))
 
 @app.route('/qr/<int:id>')
 def show_qr(id):
+    # Update this URL to your actual Render link
     base_url = "https://asset-tracker-system-o5zl.onrender.com" 
     url = f"{base_url}/asset/{id}"
+    
     qr = qrcode.make(url)
     buffer = io.BytesIO()
     qr.save(buffer, format="PNG")
     img_str = base64.b64encode(buffer.getvalue()).decode()
+    
     return render_template('qr_display.html', img_str=img_str, id=id)
 
 @app.route('/asset/<int:id>')
 def asset(id):
     conn = get_db_connection()
     data = conn.execute("SELECT * FROM assets WHERE id=?", (id,)).fetchone()
+
     if not data:
         return "Asset not found", 404
 
+    # Update scan count when QR is scanned
     new_count = data['scan_count'] + 1
     conn.execute("UPDATE assets SET scan_count=? WHERE id=?", (new_count, id))
     conn.commit()
+    
+    # Re-fetch for display
     data = conn.execute("SELECT * FROM assets WHERE id=?", (id,)).fetchone()
     conn.close()
+
     return render_template('asset.html', data=data, scan=new_count)
 
 @app.route('/export')
@@ -103,7 +112,9 @@ def export_excel():
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM assets", conn)
     conn.close()
-    file_path = "/tmp/asset_report.xlsx" # Use /tmp/ for Render's writeable space
+    
+    # Render requires writing to /tmp/ for temporary files
+    file_path = "/tmp/asset_report.xlsx"
     df.to_excel(file_path, index=False)
     return send_file(file_path, as_attachment=True)
 
