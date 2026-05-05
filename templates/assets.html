@@ -1,72 +1,50 @@
 <assets html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asset Inventory</title>
+    <meta charset="UTF-8"><title>Inventory Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <div class="container mt-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>📦 Inventory Dashboard</h2>
-            <div>
-                <a href="/export" class="btn btn-outline-success me-2">📥 Download Excel</a>
-                <a href="/" class="btn btn-primary">+ Add Asset</a>
-            </div>
+            <h2>📦 Asset Management</h2>
+            <a href="/" class="btn btn-primary">+ Add New Hardware</a>
+        </div>
+        
+        <div class="row mb-4 text-center">
+            <div class="col-md-4"><div class="card bg-dark text-white p-3"><h6>Total: {{ total }}</h6></div></div>
+            <div class="col-md-4"><div class="card bg-success text-white p-3"><h6>Working: {{ working }}</h6></div></div>
+            <div class="col-md-4"><div class="card bg-danger text-white p-3"><h6>Faulty: {{ faulty }}</h6></div></div>
         </div>
 
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="card bg-dark text-white text-center p-3 shadow-sm">
-                    <h6>Total Assets</h6>
-                    <h3>{{ total }}</h3>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card bg-success text-white text-center p-3 shadow-sm">
-                    <h6>Working</h6>
-                    <h3>{{ working }}</h3>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card bg-danger text-white text-center p-3 shadow-sm">
-                    <h6>Faulty</h6>
-                    <h3>{{ faulty }}</h3>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white p-3 rounded shadow-sm">
-            <form action="/assets" method="GET" class="mb-3 d-flex gap-2">
-                <input type="text" name="search" class="form-control" placeholder="Search Serial Number...">
-                <button type="submit" class="btn btn-secondary">Search</button>
-            </form>
-
+        <div class="table-responsive bg-white p-3 shadow-sm rounded">
             <table class="table table-hover align-middle">
-                <thead class="table-light">
+                <thead class="table-dark">
                     <tr>
                         <th>CPU Name</th>
-                        <th>Serial Number</th>
+                        <th>S/N</th>
                         <th>Status</th>
+                        <th>RAM/Storage</th>
+                        <th>Location</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in data %}
                     <tr>
-                        <td>{{ row['cpu_name'] }}</td>
-                        <td><code>{{ row['serial_number'] }}</code></td>
+                        <td>{{ row.cpu_name }}</td>
+                        <td><code>{{ row.serial_number }}</code></td>
                         <td>
-                            {% if row['status'] == 'Working' %}
-                                <span class="badge bg-success">Working</span>
-                            {% elif row['status'] == 'Faulty' %}
-                                <span class="badge bg-danger">Faulty</span>
-                            {% else %}
-                                <span class="badge bg-warning text-dark">Maintenance</span>
-                            {% endif %}
+                            <span class="badge {% if row.status == 'Working' %}bg-success{% elif row.status == 'Faulty' %}bg-danger{% else %}bg-warning{% endif %}">
+                                {{ row.status }}
+                            </span>
                         </td>
-                        <td><a href="/asset/{{ row['id'] }}" class="btn btn-sm btn-info text-white">View</a></td>
+                        <td><small>{{ row.ram_size }} / {{ row.storage_type }}</small></td>
+                        <td>{{ row.location }}</td>
+                        <td>
+                            <a href="/asset/{{ row.id }}" class="btn btn-sm btn-info text-white">View</a>
+                            <a href="/delete/{{ row.id }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Confirm delete?')">Del</a>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
