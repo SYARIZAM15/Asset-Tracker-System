@@ -1,44 +1,29 @@
-<add html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register Asset</title>
+    <meta charset="UTF-8"><title>Add Asset</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card shadow border-0">
-                    <div class="card-header bg-primary text-white text-center py-3">
-                        <h4 class="mb-0">🖥️ JPKN Asset Registration</h4>
+        <div class="card shadow-sm mx-auto" style="max-width: 600px;">
+            <div class="card-header bg-primary text-white"><h5>➕ Add New Hardware</h5></div>
+            <div class="card-body">
+                <form action="/add" method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label>CPU Name</label><input type="text" name="cpu_name" class="form-control" required></div>
+                        <div class="col-md-6 mb-3"><label>Serial Number</label><input type="text" name="serial" class="form-control" required></div>
                     </div>
-                    <div class="card-body p-4">
-                        <form action="/add" method="POST">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">CPU Name / Model</label>
-                                <input type="text" name="cpu_name" class="form-control" placeholder="e.g. HP ProDesk 600" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Serial Number</label>
-                                <input type="text" name="serial" class="form-control" placeholder="S/N" required>
-                            </div>
-                            <div class="mb-4">
-                                <label class="form-label fw-bold">Status</label>
-                                <select name="status" class="form-select">
-                                    <option value="Working">Working</option>
-                                    <option value="Faulty">Faulty</option>
-                                    <option value="Maintenance">Maintenance</option>
-                                </select>
-                            </div>
-                            <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-primary">Register & Generate QR</button>
-                                <a href="/assets" class="btn btn-outline-secondary">View All Assets</a>
-                            </div>
-                        </form>
+                    <div class="row">
+                        <div class="col-md-4 mb-3"><label>RAM (GB)</label><input type="text" name="ram" class="form-control" placeholder="8GB"></div>
+                        <div class="col-md-4 mb-3"><label>Storage</label><input type="text" name="storage" class="form-control" placeholder="SSD/HDD"></div>
+                        <div class="col-md-4 mb-3"><label>Status</label>
+                            <select name="status" class="form-select"><option>Working</option><option>Faulty</option><option>Maintenance</option></select>
+                        </div>
                     </div>
-                </div>
+                    <div class="mb-3"><label>Location / Office</label><input type="text" name="location" class="form-control" placeholder="e.g. Jabatan Perhutanan"></div>
+                    <button type="submit" class="btn btn-success w-100">Save Asset</button>
+                </form>
             </div>
         </div>
     </div>
