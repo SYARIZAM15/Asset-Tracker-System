@@ -4,3 +4,4 @@ pillow
 gunicorn
 pandas
 openpyxl
+psycopg2-binary
