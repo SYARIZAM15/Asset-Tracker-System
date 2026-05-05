@@ -1,34 +1,41 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file
-import sqlite3 # Keep for local testing
 import os
 from datetime import datetime
 import qrcode
 import io
 import base64
+import pandas as pd
+import sqlite3
 
 app = Flask(__name__)
 
-# DATABASE CONFIGURATION
-# On Render, you will add an Environment Variable named DATABASE_URL
+# --- DATABASE CONFIGURATION ---
+# This pulls the URL you pasted into Render's Environment Variables
 DB_URL = os.environ.get('DATABASE_URL') 
 
 def get_db_connection():
-    # If on Render, use PostgreSQL. If local, use SQLite.
     if DB_URL:
+        # Use PostgreSQL for Render (Production)
         import psycopg2
+        from psycopg2.extras import DictCursor
         conn = psycopg2.connect(DB_URL, sslmode='require')
+        return conn
     else:
+        # Use SQLite for Notepad/Local Testing
         conn = sqlite3.connect('database.db')
         conn.row_factory = sqlite3.Row
-    return conn
+        return conn
 
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Updated table with Hardware Details
-    cur.execute('''
+    
+    # SERIAL is for Postgres, AUTOINCREMENT is for SQLite
+    id_type = "SERIAL PRIMARY KEY" if DB_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    
+    cur.execute(f'''
         CREATE TABLE IF NOT EXISTS assets (
-            id SERIAL PRIMARY KEY,
+            id {id_type},
             cpu_name TEXT NOT NULL,
             serial_number TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -44,9 +51,52 @@ def init_db():
     cur.close()
     conn.close()
 
+# Run table creation on startup
 init_db()
 
 # --- ROUTES ---
+
+@app.route('/')
+def index():
+    return render_template('add.html')
+
+@app.route('/assets')
+def assets():
+    search = request.args.get('search')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Dashboard Statistics
+    cur.execute("SELECT COUNT(*) FROM assets")
+    total = cur.fetchone()[0]
+    
+    # Handle status counts (Case-sensitive for Postgres)
+    cur.execute("SELECT COUNT(*) FROM assets WHERE status='Working'")
+    working = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM assets WHERE status='Faulty'")
+    faulty = cur.fetchone()[0]
+    
+    # Build Query
+    if search:
+        query = "SELECT * FROM assets WHERE serial_number LIKE %s OR cpu_name LIKE %s" if DB_URL else "SELECT * FROM assets WHERE serial_number LIKE ? OR cpu_name LIKE ?"
+        params = [f'%{search}%', f'%{search}%']
+    else:
+        query = "SELECT * FROM assets ORDER BY id DESC"
+        params = []
+    
+    cur.execute(query, params)
+    
+    # Convert results to a list of dictionaries for easier template access
+    if DB_URL:
+        # Postgres returns tuples by default unless using DictCursor
+        columns = [desc[0] for desc in cur.description]
+        data = [dict(zip(columns, row)) for row in cur.fetchall()]
+    else:
+        data = cur.fetchall()
+        
+    cur.close()
+    conn.close()
+    return render_template('assets.html', data=data, total=total, working=working, faulty=faulty)
 
 @app.route('/add', methods=['POST'])
 def add():
@@ -57,23 +107,25 @@ def add():
     storage = request.form['storage']
     location = request.form['location']
     now = datetime.now().strftime("%d-%m-%Y %H:%M")
-
+    
+    placeholder = "%s, %s, %s, %s, %s, %s, %s" if DB_URL else "?, ?, ?, ?, ?, ?, ?"
+    
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(f"""
         INSERT INTO assets (cpu_name, serial_number, status, ram_size, storage_type, location, last_updated)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        VALUES ({placeholder})
     """, (cpu_name, serial, status, ram, storage, location, now))
     conn.commit()
     cur.close()
     conn.close()
     return redirect(url_for('assets'))
 
-# --- EDIT FEATURE ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
     conn = get_db_connection()
     cur = conn.cursor()
+    placeholder = "%s" if DB_URL else "?"
     
     if request.method == 'POST':
         status = request.form['status']
@@ -83,32 +135,80 @@ def edit(id):
         new_log = request.form['maintenance_logs']
         now = datetime.now().strftime("%d-%m-%Y %H:%M")
 
-        # Append new log to old logs for history
-        cur.execute("SELECT maintenance_logs FROM assets WHERE id = %s", (id,))
+        cur.execute(f"SELECT maintenance_logs FROM assets WHERE id = {placeholder}", (id,))
         old_logs = cur.fetchone()[0] or ""
-        updated_logs = f"{old_logs}\n[{now}] {new_log}"
+        updated_logs = f"{old_logs}\n[{now}] {new_log}" if new_log else old_logs
 
-        cur.execute("""
+        update_query = f"""
             UPDATE assets 
             SET status=%s, ram_size=%s, storage_type=%s, location=%s, maintenance_logs=%s, last_updated=%s
             WHERE id=%s
-        """, (status, ram, storage, location, updated_logs, now, id))
+        """ if DB_URL else f"""
+            UPDATE assets 
+            SET status=?, ram_size=?, storage_type=?, location=?, maintenance_logs=?, last_updated=?
+            WHERE id=?
+        """
+        cur.execute(update_query, (status, ram, storage, location, updated_logs, now, id))
         conn.commit()
         return redirect(url_for('assets'))
 
-    cur.execute("SELECT * FROM assets WHERE id = %s", (id,))
-    asset = cur.fetchone()
+    cur.execute(f"SELECT * FROM assets WHERE id = {placeholder}", (id,))
+    row = cur.fetchone()
+    
+    # Handle object conversion for template
+    columns = [desc[0] for desc in cur.description]
+    asset = dict(zip(columns, row))
+    
     cur.close()
     conn.close()
     return render_template('edit.html', asset=asset)
 
-# --- DELETE FEATURE ---
-@app.route('/delete/<int:id>')
-def delete(id):
+@app.route('/qr/<int:id>')
+def show_qr(id):
+    # DYNAMIC URL: Ensure this matches your Render Web Service URL
+    base_url = "https://asset-tracker-system-o5zl.onrender.com" 
+    url = f"{base_url}/asset/{id}"
+    
+    qr = qrcode.make(url)
+    buffer = io.BytesIO()
+    qr.save(buffer, format="PNG")
+    img_str = base64.b64encode(buffer.getvalue()).decode()
+    return render_template('qr_display.html', img_str=img_str, id=id)
+
+@app.route('/asset/<int:id>')
+def asset(id):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("DELETE FROM assets WHERE id = %s", (id,))
+    placeholder = "%s" if DB_URL else "?"
+    
+    cur.execute(f"SELECT * FROM assets WHERE id={placeholder}", (id,))
+    row = cur.fetchone()
+    
+    if not row:
+        return "Asset Not Found", 404
+        
+    columns = [desc[0] for desc in cur.description]
+    data = dict(zip(columns, row))
+    
+    # Update scan count
+    new_count = data['scan_count'] + 1
+    cur.execute(f"UPDATE assets SET scan_count={placeholder} WHERE id={placeholder}", (new_count, id))
+    conn.commit()
+    
+    cur.close()
+    conn.close()
+    return render_template('asset.html', data=data)
+
+@app.route('/delete/<int:id>')
+def delete(id):
+    placeholder = "%s" if DB_URL else "?"
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(f"DELETE FROM assets WHERE id = {placeholder}", (id,))
     conn.commit()
     cur.close()
     conn.close()
     return redirect(url_for('assets'))
+
+if __name__ == '__main__':
+    app.run()
