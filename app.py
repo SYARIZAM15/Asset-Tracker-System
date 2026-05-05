@@ -1,122 +1,114 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file
-import sqlite3
-import pandas as pd
+import sqlite3 # Keep for local testing
+import os
 from datetime import datetime
 import qrcode
 import io
 import base64
-import os
 
 app = Flask(__name__)
 
-# Use an absolute path for the database to ensure it works on Render's server
-db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'database.db')
+# DATABASE CONFIGURATION
+# On Render, you will add an Environment Variable named DATABASE_URL
+DB_URL = os.environ.get('DATABASE_URL') 
 
 def get_db_connection():
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    # If on Render, use PostgreSQL. If local, use SQLite.
+    if DB_URL:
+        import psycopg2
+        conn = psycopg2.connect(DB_URL, sslmode='require')
+    else:
+        conn = sqlite3.connect('database.db')
+        conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
     conn = get_db_connection()
-    conn.execute('''
+    cur = conn.cursor()
+    # Updated table with Hardware Details
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS assets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             cpu_name TEXT NOT NULL,
             serial_number TEXT NOT NULL,
             status TEXT NOT NULL,
+            ram_size TEXT,
+            storage_type TEXT,
+            location TEXT,
+            maintenance_logs TEXT,
             scan_count INTEGER DEFAULT 0,
             last_updated TEXT
         )
     ''')
     conn.commit()
+    cur.close()
     conn.close()
 
-# Initialize Database
 init_db()
 
-@app.route('/')
-def index():
-    return render_template('add.html')
-
-@app.route('/assets')
-def assets():
-    search = request.args.get('search')
-    conn = get_db_connection()
-    
-    # Calculate Dashboard Stats
-    total = conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
-    working = conn.execute("SELECT COUNT(*) FROM assets WHERE status='Working'").fetchone()[0]
-    faulty = conn.execute("SELECT COUNT(*) FROM assets WHERE status='Faulty'").fetchone()[0]
-    
-    if search:
-        data = conn.execute("SELECT * FROM assets WHERE serial_number LIKE ? OR cpu_name LIKE ?", 
-                            ('%'+search+'%', '%'+search+'%')).fetchall()
-    else:
-        data = conn.execute("SELECT * FROM assets ORDER BY id DESC").fetchall()
-    
-    conn.close()
-    return render_template('assets.html', data=data, total=total, working=working, faulty=faulty)
+# --- ROUTES ---
 
 @app.route('/add', methods=['POST'])
 def add():
     cpu_name = request.form['cpu_name']
     serial = request.form['serial']
     status = request.form['status']
+    ram = request.form['ram']
+    storage = request.form['storage']
+    location = request.form['location']
     now = datetime.now().strftime("%d-%m-%Y %H:%M")
 
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO assets (cpu_name, serial_number, status, last_updated) VALUES (?, ?, ?, ?)",
-                   (cpu_name, serial, status, now))
-    asset_id = cursor.lastrowid
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO assets (cpu_name, serial_number, status, ram_size, storage_type, location, last_updated)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (cpu_name, serial, status, ram, storage, location, now))
     conn.commit()
+    cur.close()
     conn.close()
-    
-    return redirect(url_for('show_qr', id=asset_id))
+    return redirect(url_for('assets'))
 
-@app.route('/qr/<int:id>')
-def show_qr(id):
-    # Update this URL to your actual Render link
-    base_url = "https://asset-tracker-system-o5zl.onrender.com" 
-    url = f"{base_url}/asset/{id}"
-    
-    qr = qrcode.make(url)
-    buffer = io.BytesIO()
-    qr.save(buffer, format="PNG")
-    img_str = base64.b64encode(buffer.getvalue()).decode()
-    
-    return render_template('qr_display.html', img_str=img_str, id=id)
-
-@app.route('/asset/<int:id>')
-def asset(id):
+# --- EDIT FEATURE ---
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit(id):
     conn = get_db_connection()
-    data = conn.execute("SELECT * FROM assets WHERE id=?", (id,)).fetchone()
+    cur = conn.cursor()
+    
+    if request.method == 'POST':
+        status = request.form['status']
+        ram = request.form['ram']
+        storage = request.form['storage']
+        location = request.form['location']
+        new_log = request.form['maintenance_logs']
+        now = datetime.now().strftime("%d-%m-%Y %H:%M")
 
-    if not data:
-        return "Asset not found", 404
+        # Append new log to old logs for history
+        cur.execute("SELECT maintenance_logs FROM assets WHERE id = %s", (id,))
+        old_logs = cur.fetchone()[0] or ""
+        updated_logs = f"{old_logs}\n[{now}] {new_log}"
 
-    # Update scan count when QR is scanned
-    new_count = data['scan_count'] + 1
-    conn.execute("UPDATE assets SET scan_count=? WHERE id=?", (new_count, id))
+        cur.execute("""
+            UPDATE assets 
+            SET status=%s, ram_size=%s, storage_type=%s, location=%s, maintenance_logs=%s, last_updated=%s
+            WHERE id=%s
+        """, (status, ram, storage, location, updated_logs, now, id))
+        conn.commit()
+        return redirect(url_for('assets'))
+
+    cur.execute("SELECT * FROM assets WHERE id = %s", (id,))
+    asset = cur.fetchone()
+    cur.close()
+    conn.close()
+    return render_template('edit.html', asset=asset)
+
+# --- DELETE FEATURE ---
+@app.route('/delete/<int:id>')
+def delete(id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM assets WHERE id = %s", (id,))
     conn.commit()
-    
-    # Re-fetch for display
-    data = conn.execute("SELECT * FROM assets WHERE id=?", (id,)).fetchone()
+    cur.close()
     conn.close()
-
-    return render_template('asset.html', data=data, scan=new_count)
-
-@app.route('/export')
-def export_excel():
-    conn = get_db_connection()
-    df = pd.read_sql_query("SELECT * FROM assets", conn)
-    conn.close()
-    
-    # Render requires writing to /tmp/ for temporary files
-    file_path = "/tmp/asset_report.xlsx"
-    df.to_excel(file_path, index=False)
-    return send_file(file_path, as_attachment=True)
-
-if __name__ == '__main__':
-    app.run()
+    return redirect(url_for('assets'))
