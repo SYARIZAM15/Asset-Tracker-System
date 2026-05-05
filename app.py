@@ -1,35 +1,41 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import os
 from datetime import datetime
 import qrcode
 import io
 import base64
 import pandas as pd
-import sqlite3
+import psycopg2
 
 app = Flask(__name__)
+app.secret_key = 'jpkn_secure_key' # For internship project use only
 
-# --- DATABASE CONFIGURATION ---
+# --- LOGIN SETUP ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin):
+    def __init__(self, id):
+        self.id = id
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User(user_id) if user_id == "1" else None
+
+# --- DATABASE CONFIG ---
 DB_URL = os.environ.get('DATABASE_URL') 
 
 def get_db_connection():
-    if DB_URL:
-        import psycopg2
-        conn = psycopg2.connect(DB_URL, sslmode='require')
-        return conn
-    else:
-        conn = sqlite3.connect('database.db')
-        conn.row_factory = sqlite3.Row
-        return conn
+    return psycopg2.connect(DB_URL, sslmode='require')
 
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
-    id_type = "SERIAL PRIMARY KEY" if DB_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
-    
-    cur.execute(f'''
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS assets (
-            id {id_type},
+            id SERIAL PRIMARY KEY,
             cpu_name TEXT NOT NULL,
             serial_number TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -37,6 +43,7 @@ def init_db():
             storage_type TEXT,
             location TEXT,
             maintenance_logs TEXT,
+            category TEXT,
             scan_count INTEGER DEFAULT 0,
             last_updated TEXT
         )
@@ -47,124 +54,93 @@ def init_db():
 
 init_db()
 
-# Helper to fix the missing data issue by converting rows to dictionaries
-def row_to_dict(cur, row):
-    if row is None: return None
-    columns = [desc[0] for desc in cur.description]
-    return dict(zip(columns, row))
+# --- AUTH ROUTES ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        if request.form['username'] == 'admin' and request.form['password'] == 'jpkn123':
+            login_user(User("1"))
+            return redirect(url_for('assets'))
+        flash('Invalid Credentials')
+    return render_template('login.html')
 
-@app.route('/')
-def index():
-    return render_template('add.html')
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
 
+# --- ASSET ROUTES ---
 @app.route('/assets')
+@login_required
 def assets():
+    st_filter = request.args.get('status')
+    loc_filter = request.args.get('location')
     search = request.args.get('search')
+    
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("SELECT COUNT(*) FROM assets")
-    total = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM assets WHERE status='Working'")
-    working = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM assets WHERE status='Faulty'")
-    faulty = cur.fetchone()[0]
-    
+    query = "SELECT * FROM assets WHERE 1=1"
+    params = []
+    if st_filter:
+        query += " AND status = %s"; params.append(st_filter)
+    if loc_filter:
+        query += " AND location = %s"; params.append(loc_filter)
     if search:
-        q = "SELECT * FROM assets WHERE serial_number LIKE %s OR cpu_name LIKE %s" if DB_URL else "SELECT * FROM assets WHERE serial_number LIKE ? OR cpu_name LIKE ?"
-        cur.execute(q, (f'%{search}%', f'%{search}%'))
-    else:
-        cur.execute("SELECT * FROM assets ORDER BY id DESC")
+        query += " AND (serial_number LIKE %s OR cpu_name LIKE %s)"
+        params.extend([f'%{search}%', f'%{search}%'])
     
+    query += " ORDER BY id DESC"
+    cur.execute(query, params)
     rows = cur.fetchall()
-    data = [row_to_dict(cur, r) for r in rows]
+    
+    cur.execute("SELECT DISTINCT location FROM assets")
+    locs = [r[0] for r in cur.fetchall() if r[0]]
     
     cur.close()
     conn.close()
-    return render_template('assets.html', data=data, total=total, working=working, faulty=faulty)
-
-@app.route('/add', methods=['POST'])
-def add():
-    cpu = request.form['cpu_name']
-    sn = request.form['serial']
-    st = request.form['status']
-    ram = request.form['ram']
-    store = request.form['storage']
-    loc = request.form['location']
-    now = datetime.now().strftime("%d-%m-%Y %H:%M")
-    
-    p = "%s,%s,%s,%s,%s,%s,%s" if DB_URL else "?,?,?,?,?,?,?"
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute(f"INSERT INTO assets (cpu_name,serial_number,status,ram_size,storage_type,location,last_updated) VALUES ({p})", 
-                (cpu, sn, st, ram, store, loc, now))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return redirect(url_for('assets'))
+    return render_template('assets.html', data=rows, locations=locs)
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
 def edit(id):
     conn = get_db_connection()
     cur = conn.cursor()
-    p = "%s" if DB_URL else "?"
     
     if request.method == 'POST':
-        st, ram, store, loc = request.form['status'], request.form['ram'], request.form['storage'], request.form['location']
-        log, now = request.form['maintenance_logs'], datetime.now().strftime("%d-%m-%Y %H:%M")
+        st, ram, store, loc, cat = request.form['status'], request.form['ram'], request.form['storage'], request.form['location'], request.form['category']
+        log, now = request.form['maintenance_log'], datetime.now().strftime("%d-%m-%Y %H:%M")
         
-        cur.execute(f"SELECT maintenance_logs FROM assets WHERE id={p}", (id,))
+        cur.execute("SELECT maintenance_logs FROM assets WHERE id=%s", (id,))
         old = cur.fetchone()[0] or ""
-        new_history = f"{old}\n[{now}] {log}" if log else old
+        new_hist = f"{old}\n[{now} | {cat}] {log}" if log else old
         
-        up = "UPDATE assets SET status=%s,ram_size=%s,storage_type=%s,location=%s,maintenance_logs=%s,last_updated=%s WHERE id=%s" if DB_URL else "UPDATE assets SET status=?,ram_size=?,storage_type=?,location=?,maintenance_logs=?,last_updated=? WHERE id=?"
-        cur.execute(up, (st, ram, store, loc, new_history, now, id))
+        cur.execute("UPDATE assets SET status=%s, ram_size=%s, storage_type=%s, location=%s, category=%s, maintenance_logs=%s, last_updated=%s WHERE id=%s",
+                    (st, ram, store, loc, cat, new_hist, now, id))
         conn.commit()
         return redirect(url_for('assets'))
 
-    cur.execute(f"SELECT * FROM assets WHERE id={p}", (id,))
-    asset = row_to_dict(cur, cur.fetchone())
+    cur.execute("SELECT * FROM assets WHERE id=%s", (id,))
+    asset = cur.fetchone()
     cur.close()
     conn.close()
     return render_template('edit.html', asset=asset)
 
-@app.route('/asset/<int:id>')
-def asset(id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    p = "%s" if DB_URL else "?"
-    cur.execute(f"SELECT * FROM assets WHERE id={p}", (id,))
-    data = row_to_dict(cur, cur.fetchone())
-    
-    if data:
-        cnt = (data.get('scan_count') or 0) + 1
-        cur.execute(f"UPDATE assets SET scan_count={p} WHERE id={p}", (cnt, id))
-        conn.commit()
-        data['scan_count'] = cnt
-    
-    cur.close()
-    conn.close()
-    return render_template('asset.html', data=data)
-
 @app.route('/qr/<int:id>')
+@login_required
 def show_qr(id):
     base_url = "https://asset-tracker-system-o5zl.onrender.com" 
     qr = qrcode.make(f"{base_url}/asset/{id}")
     buf = io.BytesIO()
     qr.save(buf, format="PNG")
     img = base64.b64encode(buf.getvalue()).decode()
-    return render_template('qr_display.html', img_str=img, id=id)
-
-@app.route('/delete/<int:id>')
-def delete(id):
-    p = "%s" if DB_URL else "?"
+    
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(f"DELETE FROM assets WHERE id={p}", (id,))
-    conn.commit()
+    cur.execute("SELECT serial_number FROM assets WHERE id=%s", (id,))
+    sn = cur.fetchone()[0]
     cur.close()
     conn.close()
-    return redirect(url_for('assets'))
+    return render_template('qr_display.html', img_str=img, id=id, sn=sn)
 
-if __name__ == '__main__':
-    app.run()
+# Use @login_required for /add and /delete as well
