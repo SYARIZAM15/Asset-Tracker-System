@@ -8,7 +8,7 @@ import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 
 app = Flask(__name__)
-app.secret_key = 'jpkn_assets_tracking_2026'
+app.secret_key = 'jpkn_assets_tracking_final'
 
 # Get your Internal Database URL from Render Environment Variables
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -36,7 +36,6 @@ def init_db():
     cur.close()
     conn.close()
 
-# Initialize DB on startup
 init_db()
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -55,13 +54,16 @@ def index():
     cur.execute('SELECT * FROM assets ORDER BY id DESC')
     data = cur.fetchall()
     
+    # Granular Status Counters
     total = len(data)
     working = len([r for r in data if r['status'] == 'Working'])
+    maintenance = len([r for r in data if r['status'] == 'Maintenance'])
     faulty = len([r for r in data if r['status'] == 'Faulty'])
     
     cur.close()
     conn.close()
-    return render_template('assets.html', data=data, total=total, working=working, faulty=faulty)
+    return render_template('assets.html', data=data, total=total, 
+                           working=working, maintenance=maintenance, faulty=faulty)
 
 @app.route('/add', methods=['GET', 'POST'])
 def add():
@@ -110,16 +112,13 @@ def export_assets():
     cur.execute('SELECT cpu_name, serial_number, ram_size, storage_type, location, status FROM assets')
     rows = cur.fetchall()
 
-    def generate():
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(['CPU Name', 'Serial Number', 'RAM', 'Storage', 'Location', 'Status'])
-        for row in rows:
-            writer.writerow(row)
-        yield output.getvalue()
-
-    return Response(generate(), mimetype='text/csv', 
-                    headers={"Content-Disposition": "attachment;filename=asset_report.csv"})
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['CPU Name', 'Serial Number', 'RAM', 'Storage', 'Location', 'Status'])
+    writer.writerows(rows)
+    
+    return Response(output.getvalue(), mimetype='text/csv', 
+                    headers={"Content-Disposition": "attachment;filename=assets_tracking_report.csv"})
 
 @app.route('/qr/<int:id>')
 def qr_display(id):
