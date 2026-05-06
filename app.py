@@ -62,9 +62,12 @@ def index():
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute('SELECT * FROM assets ORDER BY id DESC')
     data = cur.fetchall()
-    total, working = len(data), len([r for r in data if r['status'] == 'Working'])
+    
+    total = len(data)
+    working = len([r for r in data if r['status'] == 'Working'])
     maintenance = len([r for r in data if r['status'] == 'Maintenance'])
     faulty = len([r for r in data if r['status'] == 'Faulty'])
+    
     cur.close()
     conn.close()
     return render_template('assets.html', data=data, total=total, working=working, maintenance=maintenance, faulty=faulty)
@@ -84,7 +87,7 @@ def add():
             return redirect(url_for('index'))
         except psycopg2.errors.UniqueViolation:
             conn.rollback()
-            flash("This Serial Number is already registered.")
+            flash("This Serial Number is already registered in the system.")
             return redirect(url_for('add'))
         finally:
             cur.close()
@@ -98,10 +101,12 @@ def edit(id):
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
     asset = cur.fetchone()
+
     if request.method == 'POST':
         try:
             log_entry = f"{request.form['category']}: {request.form['action']}"
             new_logs = (asset['maintenance_logs'] + "\n" + log_entry) if asset['maintenance_logs'] else log_entry
+            
             cur.execute('''UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
                         WHERE id=%s''',
                         (request.form['asset_type'], request.form['tracking_number'], request.form['cpu_name'], request.form['ram_size'], 
@@ -110,23 +115,15 @@ def edit(id):
             return redirect(url_for('index'))
         except psycopg2.errors.UniqueViolation:
             conn.rollback()
-            flash("Update Failed: Serial Number conflict.")
+            flash("Update Failed: That Serial Number is already used by another asset.")
             return redirect(url_for('edit', id=id))
         finally:
             cur.close()
             conn.close()
-    return render_template('edit.html', asset=asset)
-
-@app.route('/delete/<int:id>', methods=['POST'])
-def delete_asset(id):
-    if 'user' not in session: return redirect(url_for('login'))
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('DELETE FROM assets WHERE id = %s', (id,))
-    conn.commit()
+    
     cur.close()
     conn.close()
-    return redirect(url_for('index'))
+    return render_template('edit.html', asset=asset)
 
 @app.route('/export')
 def export_assets():
@@ -141,6 +138,7 @@ def export_assets():
     writer.writerows(rows)
     return Response(output.getvalue(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=jpkn_report.csv"})
 
+# QR and View routes remain standard
 @app.route('/asset/<int:id>')
 def asset_view(id):
     conn = get_db_connection()
@@ -167,6 +165,17 @@ def qr_display(id):
     img.save(buf)
     qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
     return render_template('qr_display.html', id=id, sn=asset['serial_number'], qr_code=qr_b64)
+
+@app.route('/delete/<int:id>', methods=['POST'])
+def delete_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM assets WHERE id = %s', (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('index'))
 
 @app.route('/logout')
 def logout():
