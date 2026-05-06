@@ -1,86 +1,141 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import psycopg2
+import psycopg2.extras
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+import qrcode
+import io
+import base64
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'jpkn_sandakan_2026'
+app.secret_key = 'jpkn_sandakan_secret'
 
-# Menggunakan SQLite untuk mengelakkan ralat sambungan PostgreSQL
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///assets.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Replace this with your Render External Database URL
+DATABASE_URL = os.environ.get('DATABASE_URL', 'your-postgres-connection-string-here')
 
-db = SQLAlchemy(app)
-login_manager = LoginManager(app)
-login_manager.login_view = 'login' # Memastikan user ke /login jika tiada akses[cite: 1]
+def get_db_connection():
+    conn = psycopg2.connect(DATABASE_URL)
+    return conn
 
-# --- MODELS ---
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(100), nullable=False)
+# Database Initialization (Run once)
+def init_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS assets (
+            id SERIAL PRIMARY KEY,
+            cpu_name TEXT,
+            ram_size TEXT,
+            storage_type TEXT,
+            serial_number TEXT UNIQUE,
+            location TEXT,
+            status TEXT,
+            maintenance_logs TEXT,
+            scan_count INTEGER DEFAULT 0
+        );
+    ''')
+    conn.commit()
+    cur.close()
+    conn.close()
 
-class Asset(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    model = db.Column(db.String(100))
-    serial_number = db.Column(db.String(100))
-    status = db.Column(db.String(50))
-    location = db.Column(db.String(100))
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-# --- ROUTES ---
-
-@app.route('/')
-@login_required # Menyekat akses tanpa login[cite: 1]
-def index():
-    all_assets = Asset.query.all()
-    return render_template('index.html', assets=all_assets)
+init_db()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        # Log masuk admin JPKN
-        if username == 'admin' and password == 'jpkn123':
-            user = User.query.filter_by(username='admin').first()
-            if not user:
-                # Mencipta user admin jika belum wujud dalam database baru
-                user = User(username='admin', password='password')
-                db.session.add(user)
-                db.session.commit()
-            login_user(user)
-            return redirect(url_for('index'))
-        else:
-            flash('ID atau Kata Laluan Salah!')
+        # Simple login logic
+        session['user'] = request.form['username']
+        return redirect(url_for('index'))
     return render_template('login.html')
 
+@app.route('/')
+def index():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM assets ORDER BY id DESC')
+    data = cur.fetchall()
+    
+    total = len(data)
+    working = len([r for r in data if r['status'] == 'Working'])
+    faulty = len([r for r in data if r['status'] == 'Faulty'])
+    
+    cur.close()
+    conn.close()
+    return render_template('assets.html', data=data, total=total, working=working, faulty=faulty)
+
 @app.route('/add', methods=['GET', 'POST'])
-@login_required # Menyekat akses tanpa login[cite: 1]
 def add():
     if request.method == 'POST':
-        new_asset = Asset(
-            model=request.form.get('model'),
-            serial_number=request.form.get('serial_number'),
-            status=request.form.get('status'),
-            location=request.form.get('location')
-        )
-        db.session.add(new_asset)
-        db.session.commit()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('''INSERT INTO assets (cpu_name, serial_number, ram_size, storage_type, status, location) 
+                    VALUES (%s, %s, %s, %s, %s, %s)''',
+                    (request.form['cpu_name'], request.form['serial_number'], request.form['ram_size'], 
+                     request.form['storage_type'], request.form['status'], request.form['location']))
+        conn.commit()
+        cur.close()
+        conn.close()
         return redirect(url_for('index'))
     return render_template('add.html')
 
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
+    asset = cur.fetchone()
+
+    if request.method == 'POST':
+        log_entry = f"{request.form['category']}: {request.form['action']}"
+        new_logs = (asset['maintenance_logs'] + "\n" + log_entry) if asset['maintenance_logs'] else log_entry
+        
+        cur.execute('''UPDATE assets SET ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
+                    WHERE id=%s''',
+                    (request.form['ram_size'], request.form['storage_type'], request.form['location'], 
+                     request.form['status'], new_logs, id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return redirect(url_for('index'))
+    
+    cur.close()
+    conn.close()
+    return render_template('edit.html', asset=asset)
+
+@app.route('/asset/<int:id>')
+def asset(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('UPDATE assets SET scan_count = scan_count + 1 WHERE id = %s', (id,))
+    conn.commit()
+    cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
+    data = cur.fetchone()
+    cur.close()
+    conn.close()
+    return render_template('asset.html', data=data)
+
+@app.route('/qr/<int:id>')
+def qr_display(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT serial_number FROM assets WHERE id = %s', (id,))
+    asset = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    # QR links to the public detail page
+    qr_url = url_for('asset', id=id, _external=True)
+    img = qrcode.make(qr_url)
+    buf = io.BytesIO()
+    img.save(buf)
+    qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    return render_template('qr_display.html', id=id, sn=asset['serial_number'], qr_code=qr_b64)
+
 @app.route('/logout')
-@login_required
 def logout():
-    logout_user()
+    session.clear()
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all() # Mencipta fail assets.db secara automatik
     app.run(debug=True)
