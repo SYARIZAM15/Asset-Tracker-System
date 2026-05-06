@@ -1,91 +1,38 @@
 <add html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Hardware - Assets Tracking</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-</head>
+<html>
+<head><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></head>
 <body class="bg-light p-5">
     <div class="container" style="max-width: 600px;">
-        
-        <!-- Flash Message Reminder -->
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            {% for message in messages %}
-              <div class="alert alert-warning alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
-                <div class="d-flex align-items-center">
-                    <span class="fs-4 me-2">⚠️</span>
-                    <div><strong>Reminder:</strong> {{ message }}</div>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-              </div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
+        {% with messages = get_flashed_messages() %}{% if messages %}{% for m in messages %}
+        <div class="alert alert-warning alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <strong>⚠️ Reminder:</strong> {{ m }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}{% endif %}{% endwith %}
 
         <div class="card shadow border-0">
-            <div class="card-header bg-primary text-white p-3">
-                <h5 class="mb-0 fw-bold">➕ REGISTER NEW ASSET</h5>
-            </div>
+            <div class="card-header bg-primary text-white fw-bold">➕ REGISTER ASSET</div>
             <form method="POST" class="card-body p-4">
-                <div class="mb-3">
-                    <label class="fw-bold form-label">Asset Category</label>
+                <div class="mb-3"><label class="fw-bold">Asset Category</label>
                     <select name="asset_type" class="form-select" required>
-                        <option value="Laptop">Laptop</option>
-                        <option value="PC">PC</option>
-                        <option value="Monitor">Monitor</option>
-                        <option value="Printer">Printer</option>
+                        <option value="Laptop">Laptop</option><option value="PC">PC</option>
+                        <option value="Monitor">Monitor</option><option value="Printer">Printer</option>
                     </select>
                 </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="fw-bold form-label">Brand/Model</label>
-                        <input type="text" name="cpu_name" class="form-control" placeholder="e.g. HP ProBook" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="fw-bold form-label">Serial Number</label>
-                        <input type="text" name="serial_number" class="form-control" placeholder="Unique S/N" required>
-                    </div>
+                <div class="mb-3"><label class="fw-bold">Tracking Number</label><input type="text" name="tracking_number" class="form-control" placeholder="JPKN/SAN/2026/XXX"></div>
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="fw-bold">Brand/Model</label><input type="text" name="cpu_name" class="form-control" required></div>
+                    <div class="col-md-6"><label class="fw-bold">Serial Number</label><input type="text" name="serial_number" class="form-control" required></div>
                 </div>
-                
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="fw-bold form-label">RAM Size</label>
-                        <input list="ramOptions" name="ram_size" class="form-control" placeholder="Select or type...">
-                        <datalist id="ramOptions">
-                            <option value="4GB"><option value="8GB"><option value="12GB"><option value="16GB"><option value="32GB">
-                        </datalist>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="fw-bold form-label">Storage</label>
-                        <input list="storageOptions" name="storage_type" class="form-control" placeholder="Select or type...">
-                        <datalist id="storageOptions">
-                            <option value="SSD 128GB"><option value="SSD 256GB"><option value="SSD 512GB"><option value="SSD 1TB">
-                            <option value="HDD 500GB"><option value="HDD 1TB">
-                        </datalist>
-                    </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6"><label class="fw-bold">RAM</label><input list="ramOpt" name="ram_size" class="form-control"><datalist id="ramOpt"><option value="4GB"><option value="8GB"><option value="16GB"><option value="32GB"></datalist></div>
+                    <div class="col-md-6"><label class="fw-bold">Storage</label><input list="stOpt" name="storage_type" class="form-control"><datalist id="stOpt"><option value="SSD 256GB"><option value="SSD 512GB"><option value="SSD 1TB"></datalist></div>
                 </div>
-
-                <div class="mb-3">
-                    <label class="fw-bold form-label">Current Status</label>
-                    <select name="status" class="form-select">
-                        <option value="Working">Working</option>
-                        <option value="Maintenance">Maintenance</option>
-                        <option value="Faulty">Faulty</option>
-                    </select>
+                <div class="mt-3"><label class="fw-bold">Agency</label><input type="text" name="location" class="form-control" placeholder="e.g. Jabatan Perhutanan"></div>
+                <div class="mt-3"><label class="fw-bold">Status</label>
+                    <select name="status" class="form-select"><option value="Working">Working</option><option value="Maintenance">Maintenance</option><option value="Faulty">Faulty</option></select>
                 </div>
-
-                <div class="mb-4">
-                    <label class="fw-bold form-label">Agency</label>
-                    <input type="text" name="location" placeholder="e.g. Jabatan Perhutanan" class="form-control">
-                </div>
-
-                <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-success fw-bold">Save Asset to System</button>
-                    <a href="/" class="btn btn-outline-secondary">Cancel & Go Back</a>
-                </div>
+                <button type="submit" class="btn btn-success w-100 mt-4">Save Asset</button>
             </form>
         </div>
     </div>
