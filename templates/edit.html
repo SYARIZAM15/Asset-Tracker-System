@@ -1,47 +1,43 @@
 <edit html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8"><title>Edit Asset</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .header-yellow { background: #ffc107; color: black; padding: 15px; border-radius: 8px 8px 0 0; font-weight: bold; }
+        .card { max-width: 600px; margin: 50px auto; border-radius: 8px; }
+    </style>
 </head>
 <body class="bg-light">
-    <div class="container mt-5">
-        <div class="card shadow-sm mx-auto" style="max-width: 600px;">
-            <div class="card-header bg-warning text-center"><h5>📝 Edit Asset: {{ asset.cpu_name }}</h5></div>
-            <div class="card-body p-4">
-                <form action="/edit/{{ asset.id }}" method="POST">
-                    <div class="row">
-                        <div class="col-md-6 mb-3"><label class="form-label">RAM Size</label><input type="text" name="ram" value="{{ asset.ram_size }}" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Storage</label><input type="text" name="storage" value="{{ asset.storage_type }}" class="form-control"></div>
-                    </div>
-                    <div class="mb-3"><label class="form-label">Location</label><input type="text" name="location" value="{{ asset.location }}" class="form-control"></div>
-                    <div class="mb-3">
-                        <label class="form-label">Status</label>
-                        <select name="status" class="form-select">
-                            <option {% if asset.status == 'Working' %}selected{% endif %}>Working</option>
-                            <option {% if asset.status == 'Faulty' %}selected{% endif %}>Faulty</option>
-                            <option {% if asset.status == 'Maintenance' %}selected{% endif %}>Maintenance</option>
-                        </select>
-                    </div>
-                    <hr>
-                    <div class="mb-3">
-                        <label class="form-label font-weight-bold">Maintenance Category</label>
-                        <select name="category" class="form-select">
-                            <option>Hardware Upgrade</option>
-                            <option>Software Repair</option>
-                            <option>Cabling / Network</option>
-                            <option>Preventive Maintenance</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label font-weight-bold">Action Taken (Log History)</label>
-                        <textarea name="maintenance_log" class="form-control" rows="3" placeholder="e.g. Upgraded RAM to 16GB, cleaned CPU fan"></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100 mt-2">Update Asset & Save Log</button>
-                </form>
+    <div class="card shadow">
+        <div class="header-yellow">📝 Edit Asset: {{ asset.cpu_name }}</div>
+        <form method="POST" class="p-4">
+            <div class="row">
+                <div class="col"><label>RAM Size</label><input type="text" name="ram_size" value="{{ asset.ram_size }}" class="form-control"></div>
+                <div class="col"><label>Storage</label><input type="text" name="storage_type" value="{{ asset.storage_type }}" class="form-control"></div>
             </div>
-            <div class="card-footer text-center"><a href="/assets" class="btn btn-sm btn-link text-secondary">Cancel</a></div>
-        </div>
+            <div class="mt-3">
+                <label>Location</label>
+                <input type="text" name="location" value="{{ asset.location }}" class="form-control">
+            </div>
+            <div class="mt-3">
+                <label>Status</label>
+                <select name="status" class="form-select">
+                    <option value="Working" {% if asset.status == 'Working' %}selected{% endif %}>Working</option>
+                    <option value="Faulty" {% if asset.status == 'Faulty' %}selected{% endif %}>Faulty</option>
+                </select>
+            </div>
+            <hr>
+            <h6>Maintenance Log</h6>
+            <label>Category</label>
+            <select name="category" class="form-select mb-2">
+                <option>Hardware Upgrade</option>
+                <option>Software Repair</option>
+                <option>General Service</option>
+            </select>
+            <label>Action Taken</label>
+            <textarea name="action" class="form-control" rows="3" placeholder="e.g. Upgraded RAM to 16GB"></textarea>
+            <button type="submit" class="btn btn-primary w-100 mt-4">Update Asset & Save Log</button>
+        </form>
     </div>
 </body>
 </html>
