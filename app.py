@@ -8,7 +8,7 @@ import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 
 app = Flask(__name__)
-app.secret_key = 'jpkn_assets_tracking_final_2026'
+app.secret_key = 'jpkn_assets_tracking_2026_pro_v2'
 
 # Get your Internal Database URL from Render Environment Variables
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -22,6 +22,7 @@ def init_db():
     cur.execute('''
         CREATE TABLE IF NOT EXISTS assets (
             id SERIAL PRIMARY KEY,
+            asset_type TEXT,
             cpu_name TEXT,
             ram_size TEXT,
             storage_type TEXT,
@@ -36,13 +37,11 @@ def init_db():
     cur.close()
     conn.close()
 
-# Initialize database on startup
 init_db()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        # Authentication logic (can be expanded)
         session['user'] = request.form['username']
         return redirect(url_for('index'))
     return render_template('login.html')
@@ -56,7 +55,6 @@ def index():
     cur.execute('SELECT * FROM assets ORDER BY id DESC')
     data = cur.fetchall()
     
-    # Dashboard Status Counters
     total = len(data)
     working = len([r for r in data if r['status'] == 'Working'])
     maintenance = len([r for r in data if r['status'] == 'Maintenance'])
@@ -73,10 +71,10 @@ def add():
     if request.method == 'POST':
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute('''INSERT INTO assets (cpu_name, serial_number, ram_size, storage_type, status, location) 
-                    VALUES (%s, %s, %s, %s, %s, %s)''',
-                    (request.form['cpu_name'], request.form['serial_number'], request.form['ram_size'], 
-                     request.form['storage_type'], request.form['status'], request.form['location']))
+        cur.execute('''INSERT INTO assets (asset_type, cpu_name, serial_number, ram_size, storage_type, status, location) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)''',
+                    (request.form['asset_type'], request.form['cpu_name'], request.form['serial_number'], 
+                     request.form['ram_size'], request.form['storage_type'], request.form['status'], request.form['location']))
         conn.commit()
         cur.close()
         conn.close()
@@ -95,10 +93,10 @@ def edit(id):
         log_entry = f"{request.form['category']}: {request.form['action']}"
         new_logs = (asset['maintenance_logs'] + "\n" + log_entry) if asset['maintenance_logs'] else log_entry
         
-        cur.execute('''UPDATE assets SET cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
+        cur.execute('''UPDATE assets SET asset_type=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
                     WHERE id=%s''',
-                    (request.form['cpu_name'], request.form['ram_size'], request.form['storage_type'], 
-                     request.form['location'], request.form['status'], new_logs, id))
+                    (request.form['asset_type'], request.form['cpu_name'], request.form['ram_size'], 
+                     request.form['storage_type'], request.form['location'], request.form['status'], new_logs, id))
         conn.commit()
         cur.close()
         conn.close()
@@ -124,12 +122,12 @@ def export_assets():
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT cpu_name, serial_number, ram_size, storage_type, location, status FROM assets')
+    cur.execute('SELECT asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets')
     rows = cur.fetchall()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['CPU Name', 'Serial Number', 'RAM', 'Storage', 'Location', 'Status'])
+    writer.writerow(['Type', 'CPU Name', 'Serial Number', 'RAM', 'Storage', 'Location', 'Status'])
     writer.writerows(rows)
     
     return Response(output.getvalue(), mimetype='text/csv', 
