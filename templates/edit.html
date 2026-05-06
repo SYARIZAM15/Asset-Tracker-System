@@ -9,8 +9,12 @@
 </head>
 <body class="bg-light">
     <div class="card shadow">
-        <div class="header-yellow">📝 Edit Asset: {{ asset.cpu_name }}</div>
+        <div class="header-yellow text-uppercase">Modify Asset: {{ asset.serial_number }}</div>
         <form method="POST" class="p-4">
+            <div class="mb-3">
+                <label class="form-label">CPU Name / Model</label>
+                <input type="text" name="cpu_name" value="{{ asset.cpu_name }}" class="form-control">
+            </div>
             <div class="row">
                 <div class="col"><label>RAM Size</label><input type="text" name="ram_size" value="{{ asset.ram_size }}" class="form-control"></div>
                 <div class="col"><label>Storage</label><input type="text" name="storage_type" value="{{ asset.storage_type }}" class="form-control"></div>
@@ -27,16 +31,14 @@
                 </select>
             </div>
             <hr>
-            <h6>Maintenance Log</h6>
-            <label>Category</label>
+            <h6 class="fw-bold">Add Maintenance Log</h6>
             <select name="category" class="form-select mb-2">
                 <option>Hardware Upgrade</option>
                 <option>Software Repair</option>
-                <option>General Service</option>
+                <option>General Maintenance</option>
             </select>
-            <label>Action Taken</label>
-            <textarea name="action" class="form-control" rows="3" placeholder="e.g. Upgraded RAM to 16GB"></textarea>
-            <button type="submit" class="btn btn-primary w-100 mt-4">Update Asset & Save Log</button>
+            <textarea name="action" class="form-control" rows="2" placeholder="Explain the change..."></textarea>
+            <button type="submit" class="btn btn-primary w-100 mt-4">Save All Changes</button>
         </form>
     </div>
 </body>
