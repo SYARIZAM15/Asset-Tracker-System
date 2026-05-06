@@ -7,11 +7,9 @@ import psycopg2
 import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 
-# 1. INITIALIZATION (Crucial to prevent NameError)
 app = Flask(__name__)
 app.secret_key = 'jpkn_assets_tracking_final_2026'
 
-# Get your Internal Database URL from Render Environment Variables
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -21,18 +19,19 @@ def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # FREE SCHEMA UPDATE: Adds the 'asset_type' column if it doesn't exist
+    # Auto-update database columns for free
     try:
         cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS asset_type TEXT;")
+        cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS tracking_number TEXT;")
         conn.commit()
     except Exception as e:
         print(f"Schema update skipped: {e}")
 
-    # Standard table initialization
     cur.execute('''
         CREATE TABLE IF NOT EXISTS assets (
             id SERIAL PRIMARY KEY,
             asset_type TEXT,
+            tracking_number TEXT,
             cpu_name TEXT,
             ram_size TEXT,
             storage_type TEXT,
@@ -47,37 +46,28 @@ def init_db():
     cur.close()
     conn.close()
 
-# Run the initialization on startup
 init_db()
 
-# 2. ROUTES
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        # Simple session login
         session['user'] = request.form['username']
         return redirect(url_for('index'))
     return render_template('login.html')
 
 @app.route('/')
 def index():
-    if 'user' not in session:
-        return redirect(url_for('login'))
+    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute('SELECT * FROM assets ORDER BY id DESC')
     data = cur.fetchall()
-    
-    # Dashboard Counters
-    total = len(data)
-    working = len([r for r in data if r['status'] == 'Working'])
+    total, working = len(data), len([r for r in data if r['status'] == 'Working'])
     maintenance = len([r for r in data if r['status'] == 'Maintenance'])
     faulty = len([r for r in data if r['status'] == 'Faulty'])
-    
     cur.close()
     conn.close()
-    return render_template('assets.html', data=data, total=total, 
-                           working=working, maintenance=maintenance, faulty=faulty)
+    return render_template('assets.html', data=data, total=total, working=working, maintenance=maintenance, faulty=faulty)
 
 @app.route('/add', methods=['GET', 'POST'])
 def add():
@@ -86,15 +76,15 @@ def add():
         conn = get_db_connection()
         cur = conn.cursor()
         try:
-            cur.execute('''INSERT INTO assets (asset_type, cpu_name, serial_number, ram_size, storage_type, status, location) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)''',
-                        (request.form['asset_type'], request.form['cpu_name'], request.form['serial_number'], 
+            cur.execute('''INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
+                        (request.form['asset_type'], request.form['tracking_number'], request.form['cpu_name'], request.form['serial_number'], 
                          request.form['ram_size'], request.form['storage_type'], request.form['status'], request.form['location']))
             conn.commit()
             return redirect(url_for('index'))
         except psycopg2.errors.UniqueViolation:
             conn.rollback()
-            flash("This Serial Number is already registered in the system.")
+            flash("This Serial Number is already registered.")
             return redirect(url_for('add'))
         finally:
             cur.close()
@@ -108,28 +98,23 @@ def edit(id):
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
     asset = cur.fetchone()
-
     if request.method == 'POST':
         try:
             log_entry = f"{request.form['category']}: {request.form['action']}"
             new_logs = (asset['maintenance_logs'] + "\n" + log_entry) if asset['maintenance_logs'] else log_entry
-            
-            cur.execute('''UPDATE assets SET asset_type=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
+            cur.execute('''UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
                         WHERE id=%s''',
-                        (request.form['asset_type'], request.form['cpu_name'], request.form['ram_size'], 
+                        (request.form['asset_type'], request.form['tracking_number'], request.form['cpu_name'], request.form['ram_size'], 
                          request.form['storage_type'], request.form['location'], request.form['status'], new_logs, id))
             conn.commit()
             return redirect(url_for('index'))
         except psycopg2.errors.UniqueViolation:
             conn.rollback()
-            flash("Update Failed: That Serial Number is already used by another asset.")
+            flash("Update Failed: Serial Number conflict.")
             return redirect(url_for('edit', id=id))
         finally:
             cur.close()
             conn.close()
-    
-    cur.close()
-    conn.close()
     return render_template('edit.html', asset=asset)
 
 @app.route('/delete/<int:id>', methods=['POST'])
@@ -148,16 +133,13 @@ def export_assets():
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets')
+    cur.execute('SELECT asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets')
     rows = cur.fetchall()
-
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Type', 'Brand/Model', 'Serial Number', 'RAM', 'Storage', 'Agency', 'Status'])
+    writer.writerow(['Type', 'Tracking No', 'Brand/Model', 'Serial Number', 'RAM', 'Storage', 'Agency', 'Status'])
     writer.writerows(rows)
-    
-    return Response(output.getvalue(), mimetype='text/csv', 
-                    headers={"Content-Disposition": "attachment;filename=jpkn_assets_report.csv"})
+    return Response(output.getvalue(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=jpkn_report.csv"})
 
 @app.route('/asset/<int:id>')
 def asset_view(id):
@@ -179,7 +161,6 @@ def qr_display(id):
     asset = cur.fetchone()
     cur.close()
     conn.close()
-    
     qr_url = url_for('asset_view', id=id, _external=True)
     img = qrcode.make(qr_url)
     buf = io.BytesIO()
