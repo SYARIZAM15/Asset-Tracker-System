@@ -15,10 +15,25 @@
                 </select>
             </div>
             <div class="mb-3"><label class="fw-bold">CPU Name</label><input type="text" name="cpu_name" value="{{ asset.cpu_name }}" class="form-control"></div>
+            
             <div class="row">
-                <div class="col"><label class="fw-bold">RAM Size</label><input type="text" name="ram_size" value="{{ asset.ram_size }}" class="form-control"></div>
-                <div class="col"><label class="fw-bold">Storage</label><input type="text" name="storage_type" value="{{ asset.storage_type }}" class="form-control"></div>
+                <div class="col">
+                    <label class="fw-bold">RAM Size</label>
+                    <input list="ramOptions" name="ram_size" value="{{ asset.ram_size }}" class="form-control">
+                    <datalist id="ramOptions">
+                        <option value="4GB"><option value="8GB"><option value="12GB"><option value="16GB"><option value="32GB">
+                    </datalist>
+                </div>
+                <div class="col">
+                    <label class="fw-bold">Storage Type & Size</label>
+                    <input list="storageOptions" name="storage_type" value="{{ asset.storage_type }}" class="form-control">
+                    <datalist id="storageOptions">
+                        <option value="SSD 128GB"><option value="SSD 256GB"><option value="SSD 512GB"><option value="SSD 1TB">
+                        <option value="HDD 500GB"><option value="HDD 1TB">
+                    </datalist>
+                </div>
             </div>
+
             <div class="mt-3"><label class="fw-bold">Location</label><input type="text" name="location" value="{{ asset.location }}" class="form-control"></div>
             <div class="mt-3">
                 <label class="fw-bold">Status</label>
