@@ -8,9 +8,8 @@ import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 
 app = Flask(__name__)
-app.secret_key = 'jpkn_assets_tracking_2026_pro_v2'
+app.secret_key = 'jpkn_assets_tracking_final_2026'
 
-# Get your Internal Database URL from Render Environment Variables
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -19,6 +18,15 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
+    
+    # 1. FIX: This line adds the missing column automatically for FREE
+    try:
+        cur.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS asset_type TEXT;")
+        conn.commit()
+    except Exception as e:
+        print(f"Schema update skipped: {e}")
+
+    # 2. Standard table initialization
     cur.execute('''
         CREATE TABLE IF NOT EXISTS assets (
             id SERIAL PRIMARY KEY,
@@ -37,6 +45,7 @@ def init_db():
     cur.close()
     conn.close()
 
+# Run the initialization
 init_db()
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -131,7 +140,7 @@ def export_assets():
     writer.writerows(rows)
     
     return Response(output.getvalue(), mimetype='text/csv', 
-                    headers={"Content-Disposition": "attachment;filename=assets_tracking_report.csv"})
+                    headers={"Content-Disposition": "attachment;filename=assets_report.csv"})
 
 @app.route('/asset/<int:id>')
 def asset_view(id):
