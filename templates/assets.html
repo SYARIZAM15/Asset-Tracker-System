@@ -13,7 +13,7 @@
 <body class="p-5 bg-light">
     <div class="container bg-white p-4 rounded shadow">
         <div class="d-flex justify-content-between align-items-center">
-            <h3 class="fw-bold">ASSETS TRACKING</h3>
+            <h3 class="fw-bold text-uppercase">Assets Tracking</h3>
             <div>
                 <a href="/export" class="btn btn-success btn-sm">📊 Export CSV</a>
                 <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
@@ -21,7 +21,7 @@
             </div>
         </div>
 
-        <div class="row mt-4 text-uppercase">
+        <div class="row mt-4">
             <div class="col"><div class="stat-card bg-black">Total: {{ total }}</div></div>
             <div class="col"><div class="stat-card bg-green">Working: {{ working }}</div></div>
             <div class="col"><div class="stat-card bg-yellow">Maintenance: {{ maintenance }}</div></div>
@@ -29,7 +29,7 @@
         </div>
 
         <div class="mt-4">
-            <input type="text" id="liveSearch" class="form-control" placeholder="Live search by Serial, CPU, or Location...">
+            <input type="text" id="liveSearch" class="form-control" placeholder="Live search Serial, CPU, or Location...">
         </div>
 
         <table class="table mt-3 table-hover">
@@ -54,7 +54,7 @@
                         <div class="d-flex gap-1">
                             <a href="/asset/{{ row.id }}" class="btn btn-sm btn-info">View</a>
                             <a href="/edit/{{ row.id }}" class="btn btn-sm btn-warning">Edit</a>
-                            <form action="/delete/{{ row.id }}" method="POST" onsubmit="return confirm('Delete this asset permanently?');">
+                            <form action="/delete/{{ row.id }}" method="POST" onsubmit="return confirm('Delete permanently?');">
                                 <button type="submit" class="btn btn-sm btn-danger">Del</button>
                             </form>
                             <a href="/qr/{{ row.id }}" class="btn btn-sm btn-dark">QR</a>
