@@ -1,9 +1,17 @@
-<assets html>
+<!DOCTYPE html>
 <html>
 <head>
     <title>ASSETS TRACKING - Dashboard</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        /* This handles the look of your missing dashboard cards */
+        .stat-card { padding: 20px; border-radius: 8px; color: white; text-align: center; font-weight: bold; }
+        .bg-black { background: #212529; } 
+        .bg-green { background: #198754; } 
+        .bg-yellow { background: #ffc107; color: #212529 !important; } 
+        .bg-red { background: #dc3545; }
+    </style>
 </head>
 <body class="p-5 bg-light">
     <div class="container bg-white p-4 rounded shadow">
@@ -15,6 +23,15 @@
                 <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
             </div>
         </div>
+
+        <!-- 🟢 ADD THIS SECTION BACK TO FIX THE DASHBOARD -->
+        <div class="row mt-4 g-3">
+            <div class="col-md-3"><div class="stat-card bg-black shadow-sm">Total: {{ total }}</div></div>
+            <div class="col-md-3"><div class="stat-card bg-green shadow-sm">Working: {{ working }}</div></div>
+            <div class="col-md-3"><div class="stat-card bg-yellow shadow-sm">Maintenance: {{ maintenance }}</div></div>
+            <div class="col-md-3"><div class="stat-card bg-red shadow-sm">Faulty: {{ faulty }}</div></div>
+        </div>
+        <!-- 🔴 END OF DASHBOARD SECTION -->
 
         <div class="row mt-4 g-2">
             <div class="col-md-8"><input type="text" id="liveSearch" class="form-control" placeholder="Search Tracking No, S/N, or Agency..."></div>
@@ -53,6 +70,7 @@
             </tbody>
         </table>
     </div>
+
     <script>
         $(document).ready(function(){
             function filter() {
