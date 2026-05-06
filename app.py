@@ -1,22 +1,21 @@
 import os
+import io
+import csv
+import base64
+import qrcode
 import psycopg2
 import psycopg2.extras
-from flask import Flask, render_template, request, redirect, url_for, session, flash
-import qrcode
-import io
-import base64
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 
 app = Flask(__name__)
-app.secret_key = 'jpkn_sandakan_secret'
+app.secret_key = 'jpkn_assets_tracking_2026'
 
-# Replace this with your Render External Database URL
-DATABASE_URL = os.environ.get('DATABASE_URL', 'your-postgres-connection-string-here')
+# Get your Internal Database URL from Render Environment Variables
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+    return psycopg2.connect(DATABASE_URL)
 
-# Database Initialization (Run once)
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -37,12 +36,12 @@ def init_db():
     cur.close()
     conn.close()
 
+# Initialize DB on startup
 init_db()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        # Simple login logic
         session['user'] = request.form['username']
         return redirect(url_for('index'))
     return render_template('login.html')
@@ -90,10 +89,10 @@ def edit(id):
         log_entry = f"{request.form['category']}: {request.form['action']}"
         new_logs = (asset['maintenance_logs'] + "\n" + log_entry) if asset['maintenance_logs'] else log_entry
         
-        cur.execute('''UPDATE assets SET ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
+        cur.execute('''UPDATE assets SET cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s, maintenance_logs=%s 
                     WHERE id=%s''',
-                    (request.form['ram_size'], request.form['storage_type'], request.form['location'], 
-                     request.form['status'], new_logs, id))
+                    (request.form['cpu_name'], request.form['ram_size'], request.form['storage_type'], 
+                     request.form['location'], request.form['status'], new_logs, id))
         conn.commit()
         cur.close()
         conn.close()
@@ -103,17 +102,24 @@ def edit(id):
     conn.close()
     return render_template('edit.html', asset=asset)
 
-@app.route('/asset/<int:id>')
-def asset(id):
+@app.route('/export')
+def export_assets():
+    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute('UPDATE assets SET scan_count = scan_count + 1 WHERE id = %s', (id,))
-    conn.commit()
-    cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
-    data = cur.fetchone()
-    cur.close()
-    conn.close()
-    return render_template('asset.html', data=data)
+    cur = conn.cursor()
+    cur.execute('SELECT cpu_name, serial_number, ram_size, storage_type, location, status FROM assets')
+    rows = cur.fetchall()
+
+    def generate():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['CPU Name', 'Serial Number', 'RAM', 'Storage', 'Location', 'Status'])
+        for row in rows:
+            writer.writerow(row)
+        yield output.getvalue()
+
+    return Response(generate(), mimetype='text/csv', 
+                    headers={"Content-Disposition": "attachment;filename=asset_report.csv"})
 
 @app.route('/qr/<int:id>')
 def qr_display(id):
@@ -124,13 +130,24 @@ def qr_display(id):
     cur.close()
     conn.close()
     
-    # QR links to the public detail page
-    qr_url = url_for('asset', id=id, _external=True)
+    qr_url = url_for('asset_view', id=id, _external=True)
     img = qrcode.make(qr_url)
     buf = io.BytesIO()
     img.save(buf)
     qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
     return render_template('qr_display.html', id=id, sn=asset['serial_number'], qr_code=qr_b64)
+
+@app.route('/asset/<int:id>')
+def asset_view(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('UPDATE assets SET scan_count = scan_count + 1 WHERE id = %s', (id,))
+    conn.commit()
+    cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
+    data = cur.fetchone()
+    cur.close()
+    conn.close()
+    return render_template('asset.html', data=data)
 
 @app.route('/logout')
 def logout():
