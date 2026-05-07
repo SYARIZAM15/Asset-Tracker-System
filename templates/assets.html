@@ -9,58 +9,79 @@
     </style>
 </head>
 <body class="bg-light">
-    <nav class="navbar navbar-dark bg-dark mb-4 p-3">
+    <nav class="navbar navbar-dark bg-dark mb-4 p-3 shadow">
         <div class="container d-flex justify-content-between">
-            <span class="navbar-brand">🏢 JPKN ASSET TRACKER</span>
-            <span class="text-white">Role: <span class="badge bg-primary">{{ role }}</span> | <a href="/logout" class="text-danger">Logout</a></span>
+            <span class="navbar-brand fw-bold">🏢 JPKN ASSET TRACKER</span>
+            <span class="text-white">
+                User: <strong>{{ session.user }}</strong> | 
+                Role: <span class="badge bg-primary">{{ role }}</span> | 
+                <a href="/logout" class="text-danger ms-2">Logout</a>
+            </span>
         </div>
     </nav>
 
     <div class="container">
         <div class="row g-3 mb-4 text-center">
-            <div class="col-md-3"><div class="card p-3 bg-primary text-white shadow-sm"><h6>Total</h6><h2>{{ total }}</h2></div></div>
+            <div class="col-md-3"><div class="card p-3 bg-primary text-white shadow-sm"><h6>Total Assets</h6><h2>{{ total }}</h2></div></div>
             <div class="col-md-3"><div class="card p-3 bg-success text-white shadow-sm"><h6>Working</h6><h2>{{ working }}</h2></div></div>
             <div class="col-md-3"><div class="card p-3 bg-warning shadow-sm"><h6>Maintenance</h6><h2>{{ maint }}</h2></div></div>
             <div class="col-md-3"><div class="card p-3 bg-danger text-white shadow-sm"><h6>Faulty</h6><h2>{{ faulty }}</h2></div></div>
         </div>
 
-        <div class="card p-3 mb-4 shadow-sm">
-            <form method="GET" class="row g-2">
-                <div class="col-md-6"><input type="text" name="search" class="form-control" placeholder="Search Assets..." value="{{ s_query }}"></div>
+        <div class="card p-3 mb-4 shadow-sm border-0">
+            <form method="GET" action="/" class="row g-2">
+                <div class="col-md-6">
+                    <input type="text" name="search" class="form-control" placeholder="Search S/N or Tracking No..." value="{{ s_query }}">
+                </div>
                 <div class="col-md-4">
                     <select name="category" class="form-select">
                         <option value="">All Categories</option>
                         <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option>
-                        <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC</option>
+                        <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC / Desktop</option>
+                        <option value="Printer" {{ 'selected' if c_filter == 'Printer' }}>Printer</option>
                     </select>
                 </div>
-                <div class="col-md-2"><button type="submit" class="btn btn-dark w-100">Search</button></div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark w-100 fw-bold">Search</button>
+                </div>
             </form>
         </div>
 
         <div class="d-flex justify-content-between mb-3">
-            <a href="/add" class="btn btn-success">+ Register New</a>
-            {% if role == 'Admin' %}<a href="/admin/logs" class="btn btn-warning">📜 View Logs</a>{% endif %}
+            <a href="/add" class="btn btn-success fw-bold px-4">+ Register New Asset</a>
+            {% if role == 'Admin' %}
+            <a href="/admin/logs" class="btn btn-warning fw-bold">📜 View Activity Logs</a>
+            {% endif %}
         </div>
 
         <div class="table-responsive bg-white rounded shadow-sm">
-            <table class="table align-middle">
+            <table class="table align-middle mb-0">
                 <thead class="table-light">
                     <tr><th>Tracking No</th><th>Model</th><th>Status</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                     {% for row in data %}
                     <tr class="{{ 'deleted-row' if row.is_deleted }}">
-                        <td>{{ row.tracking_number }}</td>
+                        <td class="fw-bold">{{ row.tracking_number }}</td>
                         <td>{{ row.cpu_name }}</td>
-                        <td>{{ 'ARCHIVED' if row.is_deleted else row.status }}</td>
                         <td>
-                            <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white">QR</a>
-                            {% if not row.is_deleted %}
-                            <form action="/delete/{{ row.id }}" method="POST" class="d-inline">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Archive?')">Delete</button>
-                            </form>
+                            {% if row.is_deleted %}
+                                <span class="badge bg-secondary">ARCHIVED</span>
+                            {% else %}
+                                <span class="badge {{ 'bg-success' if row.status == 'Working' else 'bg-warning' if row.status == 'Maintenance' else 'bg-danger' }}">
+                                    {{ row.status }}
+                                </span>
                             {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white">QR</a>
+                                {% if not row.is_deleted %}
+                                <form action="/delete/{{ row.id }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Archive this record?')">Delete</button>
+                                </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
