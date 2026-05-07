@@ -3,140 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JPKN Asset Management System</title>
+    <title>JTDI Asset Tracker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
-        body { background-color: #f4f7f6; }
-        .navbar { border-bottom: 3px solid #0d6efd; }
-        .card-stats { border: none; border-radius: 12px; transition: 0.3s; }
-        .card-stats:hover { transform: translateY(-5px); }
-        .table-container { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .badge-status { font-size: 0.85rem; padding: 0.5em 0.8em; }
+        body { background-color: #f8f9fa; }
+        .card-stats { border: none; border-radius: 10px; color: white; transition: 0.3s; }
+        .card-stats:hover { transform: translateY(-3px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .navbar-brand { font-weight: 800; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 p-3 shadow">
+    <nav class="navbar navbar-dark bg-dark mb-4 p-3 shadow-sm">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="/">🏢 JPKN ASSET TRACKER</a>
-            <div class="d-flex align-items-center">
-                <span class="text-light me-3 small">Logged in as: <strong>{{ session.user }}</strong></span>
-                <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+            <a class="navbar-brand" href="/">🏢 JTDI ASSET TRACKER</a>
+            <div class="text-white small">
+                Logged in: <strong>{{ session.user }}</strong> | 
+                <a href="/logout" class="btn btn-outline-danger btn-sm ms-2">Logout</a>
             </div>
         </div>
     </nav>
 
     <div class="container">
-        
         <div class="row g-3 mb-4 text-center">
             <div class="col-md-3">
-                <div class="card card-stats p-3 bg-primary text-white shadow-sm">
-                    <h6 class="text-uppercase small">Total Assets</h6>
-                    <h2 class="fw-bold mb-0">{{ total }}</h2>
+                <div class="card card-stats p-3 bg-primary">
+                    <small class="text-uppercase">Total Assets</small>
+                    <h2 class="mb-0">{{ total }}</h2>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card card-stats p-3 bg-success text-white shadow-sm">
-                    <h6 class="text-uppercase small">Working</h6>
-                    <h2 class="fw-bold mb-0">{{ working }}</h2>
+                <div class="card card-stats p-3 bg-success">
+                    <small class="text-uppercase">Working</small>
+                    <h2 class="mb-0">{{ working }}</h2>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card card-stats p-3 bg-warning text-dark shadow-sm">
-                    <h6 class="text-uppercase small">Maintenance</h6>
-                    <h2 class="fw-bold mb-0">{{ maint }}</h2>
+                <div class="card card-stats p-3 bg-warning text-dark">
+                    <small class="text-uppercase">Maintenance</small>
+                    <h2 class="mb-0">{{ maint }}</h2>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card card-stats p-3 bg-danger text-white shadow-sm">
-                    <h6 class="text-uppercase small">Faulty</h6>
-                    <h2 class="fw-bold mb-0">{{ faulty }}</h2>
+                <div class="card card-stats p-3 bg-danger">
+                    <small class="text-uppercase">Faulty</small>
+                    <h2 class="mb-0">{{ faulty }}</h2>
                 </div>
             </div>
         </div>
 
-        <div class="card p-4 mb-4 shadow-sm border-0" style="border-radius: 12px;">
-            <form method="GET" action="/" class="row g-3">
+        <div class="card p-3 mb-4 shadow-sm border-0">
+            <form method="GET" action="/" class="row g-2 align-items-end">
                 <div class="col-md-5">
-                    <label class="form-label small fw-bold">Search</label>
-                    <input type="text" name="search" class="form-control" placeholder="Search S/N, Tracking No, or Brand..." value="{{ s_query }}">
+                    <label class="form-label small fw-bold">Search Keywords</label>
+                    <input type="text" name="search" class="form-control" placeholder="S/N, Tracking No, or Brand..." value="{{ s_query }}">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold">Category</label>
+                    <label class="form-label small fw-bold">Filter Category</label>
                     <select name="category" class="form-select">
-                        <option value="">All Categories</option>
+                        <option value="">All Assets</option>
                         <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC / Desktop</option>
                         <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option>
                         <option value="Monitor" {{ 'selected' if c_filter == 'Monitor' }}>Monitor</option>
                         <option value="Printer" {{ 'selected' if c_filter == 'Printer' }}>Printer</option>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button type="submit" class="btn btn-dark w-100 fw-bold py-2">🔍 Search & Filter</button>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-dark w-100">🔍 Filter Results</button>
                 </div>
             </form>
         </div>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="fw-bold text-secondary">Asset Inventory List</h4>
-            <a href="/add" class="btn btn-success fw-bold px-4 shadow-sm">+ Register New Asset</a>
+            <h4 class="mb-0 fw-bold">Inventory Records</h4>
+            <a href="/add" class="btn btn-success px-4 shadow-sm">+ Register New Asset</a>
         </div>
 
-        <div class="table-container shadow-sm border">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Tracking No</th>
-                            <th>Category</th>
-                            <th>Brand / Model</th>
-                            <th>Status</th>
-                            <th class="text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in data %}
-                        <tr>
-                            <td class="fw-bold text-primary">{{ row.tracking_number }}</td>
-                            <td><span class="badge bg-light text-dark border">{{ row.asset_type }}</span></td>
-                            <td>{{ row.cpu_name }}</td>
-                            <td>
-                                {% if row.status == 'Working' %}
-                                    <span class="badge bg-success badge-status">Working</span>
-                                {% elif row.status == 'Maintenance' %}
-                                    <span class="badge bg-warning text-dark badge-status">Maintenance</span>
-                                {% else %}
-                                    <span class="badge bg-danger badge-status">Faulty</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div class="btn-group shadow-sm">
-                                    <a href="/view/{{ row.id }}" class="btn btn-sm btn-outline-primary" title="View Details">View</a>
-                                    <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-secondary" title="Edit Data">Edit</a>
-                                    <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white" title="Get QR Code">QR</a>
-                                    <form action="/delete/{{ row.id }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this asset permanently?');">
-                                        <button type="submit" class="btn btn-sm btn-danger">Del</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            {% if not data %}
-            <div class="text-center py-5">
-                <p class="text-muted mb-0">No assets found. Try adjusting your search or category filters.</p>
-            </div>
-            {% endif %}
+        <div class="table-responsive bg-white rounded shadow-sm border p-2">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tracking No</th>
+                        <th>Category</th>
+                        <th>Brand/Model</th>
+                        <th>Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ row.tracking_number }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ row.asset_type }}</span></td>
+                        <td>{{ row.cpu_name }}</td>
+                        <td>
+                            <span class="badge {{ 'bg-success' if row.status == 'Working' else 'bg-warning' if row.status == 'Maintenance' else 'bg-danger' }}">
+                                {{ row.status }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group">
+                                <a href="/view/{{ row.id }}" class="btn btn-sm btn-outline-primary">View</a>
+                                <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white">QR</a>
+                                <form action="/delete/{{ row.id }}" method="POST" class="d-inline" onsubmit="return confirm('Delete permanently?');">
+                                    <button type="submit" class="btn btn-sm btn-danger">Del</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <footer class="text-center text-muted mt-5 mb-3">
-        <small>&copy; 2026 JPKN Asset Tracking System - Sandakan Branch</small>
+    <footer class="text-center mt-5 mb-4 text-muted small">
+        &copy; 2026 JTDI Asset Tracker - Management System
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
