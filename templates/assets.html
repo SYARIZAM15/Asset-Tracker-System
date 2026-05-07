@@ -1,34 +1,37 @@
-<!DOCTYPE html>
+<assets html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asset Tracker - Old Version</title>
+    <title>JPKN Asset Tracker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
 <body class="bg-light">
-
-    <nav class="navbar navbar-dark bg-dark p-3">
+    <nav class="navbar navbar-dark bg-dark p-3 shadow-sm">
         <div class="container">
-            <a class="navbar-brand" href="/">JPKN ASSET LIST</a>
-            <span class="text-white">Logged in as: {{ session.user }} | <a href="/logout" class="text-danger">Logout</a></span>
+            <a class="navbar-brand fw-bold" href="/">🏢 JPKN ASSET TRACKER</a>
+            <span class="text-white">Logged in: {{ session.user }} | <a href="/logout" class="text-danger">Logout</a></span>
         </div>
     </nav>
 
-    <div class="container mt-5">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2>Inventory Records</h2>
-            <a href="/add" class="btn btn-primary">+ Add New Asset</a>
+    <div class="container mt-4">
+        <div class="row g-3 mb-4 text-center">
+            <div class="col-md-3"><div class="card p-3 bg-primary text-white"><h6>Total</h6><h2>{{ total }}</h2></div></div>
+            <div class="col-md-3"><div class="card p-3 bg-success text-white"><h6>Working</h6><h2>{{ working }}</h2></div></div>
+            <div class="col-md-3"><div class="card p-3 bg-warning"><h6>Maintenance</h6><h2>{{ maint }}</h2></div></div>
+            <div class="col-md-3"><div class="card p-3 bg-danger text-white"><h6>Faulty</h6><h2>{{ faulty }}</h2></div></div>
+        </div>
+
+        <div class="d-flex justify-content-between mb-3">
+            <h3>Asset Inventory</h3>
+            <a href="/add" class="btn btn-success">+ Add New Asset</a>
         </div>
 
         <div class="card shadow-sm">
-            <table class="table table-striped mb-0">
+            <table class="table table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
                         <th>Tracking No</th>
-                        <th>Brand/Model</th>
-                        <th>S/N</th>
-                        <th>Location</th>
+                        <th>Model</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -36,29 +39,24 @@
                 <tbody>
                     {% for row in data %}
                     <tr>
-                        <td>{{ row.tracking_number }}</td>
+                        <td class="fw-bold">{{ row.tracking_number }}</td>
                         <td>{{ row.cpu_name }}</td>
-                        <td>{{ row.serial_number }}</td>
-                        <td>{{ row.location }}</td>
                         <td>{{ row.status }}</td>
                         <td>
-                            <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white">QR</a>
-                            <form action="/delete/{{ row.id }}" method="POST" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                            </form>
+                            <div class="btn-group">
+                                <a href="/view/{{ row.id }}" class="btn btn-sm btn-outline-primary">View</a>
+                                <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white">QR</a>
+                                <form action="/delete/{{ row.id }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete permanently?')">Del</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-
-        {% if not data %}
-        <div class="alert alert-info mt-3 text-center">
-            No assets found in the database.
-        </div>
-        {% endif %}
     </div>
-
 </body>
 </html>
