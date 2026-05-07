@@ -7,11 +7,9 @@ import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime
 
-# Initialize the Flask App
 app = Flask(__name__)
-app.secret_key = 'jtdi_asset_tracker_2026_final'
+app.secret_key = 'jtdi_asset_tracker_final_2026'
 
-# Database Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -20,7 +18,6 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Ensure table exists with all columns
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY,
         asset_type TEXT,
@@ -37,13 +34,12 @@ def init_db():
     cur.close()
     conn.close()
 
-# Run DB initialization
 init_db()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        session['user'] = request.form['username'].strip()
+        session['user'] = request.form.get('username', 'Staff').strip()
         return redirect(url_for('index'))
     return render_template('login.html')
 
@@ -51,31 +47,25 @@ def login():
 def index():
     if 'user' not in session: return redirect(url_for('login'))
     
-    search_query = request.args.get('search', '').strip()
-    category_filter = request.args.get('category', '').strip()
+    search = request.args.get('search', '').strip()
+    category = request.args.get('category', '').strip()
     
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    # Base Query
     query = "SELECT * FROM assets WHERE 1=1"
     params = []
 
-    # Search Logic
-    if search_query:
+    if search:
         query += " AND (serial_number ILIKE %s OR tracking_number ILIKE %s OR cpu_name ILIKE %s)"
-        params.extend([f'%{search_query}%', f'%{search_query}%', f'%{search_query}%'])
-    
-    # Category Filter Logic
-    if category_filter:
+        params.extend([f'%{search}%', f'%{search}%', f'%{search}%'])
+    if category:
         query += " AND asset_type = %s"
-        params.append(category_filter)
+        params.append(category)
 
-    query += " ORDER BY id DESC"
-    cur.execute(query, tuple(params))
+    cur.execute(query + " ORDER BY id DESC", tuple(params))
     data = cur.fetchall()
 
-    # Dashboard Statistics
     stats = {
         'total': len(data),
         'working': len([r for r in data if r['status'] == 'Working']),
@@ -85,12 +75,7 @@ def index():
     
     cur.close()
     conn.close()
-    
-    return render_template('assets.html', 
-                           data=data, 
-                           **stats, 
-                           s_query=search_query, 
-                           c_filter=category_filter)
+    return render_template('assets.html', data=data, **stats, s_query=search, c_filter=category)
 
 @app.route('/add', methods=['GET', 'POST'])
 def add():
@@ -99,47 +84,39 @@ def add():
         conn = get_db_connection()
         cur = conn.cursor()
         try:
-            cur.execute('''INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
-                        (request.form['asset_type'], request.form['tracking_number'], request.form['cpu_name'], 
-                         request.form['serial_number'], request.form['ram_size'], 
-                         request.form['storage_type'], request.form['status'], request.form['location']))
+            # Generate Tracking Number (JTDI/SDK/2026/000X)
+            year = "2026"
+            prefix = f"JTDI/SDK/{year}/"
+            cur.execute("SELECT COUNT(*) FROM assets")
+            count = cur.fetchone()[0]
+            auto_track = f"{prefix}{count + 1:04d}"
+
+            # Safely get form data to prevent 400 Bad Request
+            cur.execute('''INSERT INTO assets 
+                (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
+                (
+                    request.form.get('asset_type', 'Laptop'),
+                    auto_track,
+                    request.form.get('cpu_name', 'Unknown Model'),
+                    request.form.get('serial_number', 'N/A'),
+                    request.form.get('ram_size', 'N/A'),
+                    request.form.get('storage_type', 'N/A'),
+                    request.form.get('status', 'Working'),
+                    request.form.get('location', 'Sandakan HQ')
+                ))
             conn.commit()
             return redirect(url_for('index'))
         except Exception as e:
             conn.rollback()
-            flash(f"Error: {e}")
+            flash(f"Database Error: {e}")
         finally:
             cur.close()
             conn.close()
     return render_template('add.html')
 
-@app.route('/edit/<int:id>', methods=['GET', 'POST'])
-def edit(id):
-    if 'user' not in session: return redirect(url_for('login'))
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
-    asset = cur.fetchone()
-
-    if request.method == 'POST':
-        cur.execute('''UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, 
-                    storage_type=%s, location=%s, status=%s WHERE id=%s''',
-                    (request.form['asset_type'], request.form['tracking_number'], request.form['cpu_name'], 
-                     request.form['ram_size'], request.form['storage_type'], request.form['location'], 
-                     request.form['status'], id))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return redirect(url_for('index'))
-    
-    cur.close()
-    conn.close()
-    return render_template('edit.html', asset=asset)
-
 @app.route('/view/<int:id>')
 def view_asset(id):
-    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
@@ -159,7 +136,6 @@ def qr_code(id):
 
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_asset(id):
-    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("DELETE FROM assets WHERE id = %s", (id,))
