@@ -1,82 +1,123 @@
 <assets html>
-<html>
+<html lang="en">
 <head>
-    <title>ASSETS TRACKING - Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JPKN Asset Management</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        .stat-card { padding: 20px; border-radius: 8px; color: white; text-align: center; font-weight: bold; }
-        .bg-black { background: #212529; } .bg-green { background: #198754; } 
-        .bg-yellow { background: #ffc107; color: #212529 !important; } .bg-red { background: #dc3545; }
+        body { background-color: #f8f9fa; }
+        .navbar-brand { font-weight: bold; letter-spacing: 1px; }
+        .card-stats { transition: transform 0.2s; border: none; }
+        .card-stats:hover { transform: translateY(-5px); }
+        .deleted-row { background-color: #f1f1f1 !important; color: #888; text-decoration: line-through; }
+        .badge-admin { background-color: #6f42c1; color: white; }
     </style>
 </head>
-<body class="p-5 bg-light">
-    <div class="container bg-white p-4 rounded shadow">
-        <div class="d-flex justify-content-between align-items-center">
-            <h3 class="fw-bold">JPKN ASSET TRACKING</h3>
-            <div class="d-flex gap-2">
-                <a href="/export" class="btn btn-success btn-sm">📊 Export CSV</a>
-                <a href="/add" class="btn btn-primary btn-sm">+ Add Hardware</a>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/">🏢 JPKN ASSET TRACKER</a>
+            <div class="d-flex align-items-center">
+                <span class="text-light me-3 small">
+                    Logged in as: <strong>{{ session.user }}</strong> 
+                    <span class="badge {{ 'badge-admin' if role == 'Admin' else 'bg-secondary' }}">
+                        {{ role }}
+                    </span>
+                </span>
                 <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
             </div>
         </div>
+    </nav>
 
-        <!-- Dashboard Counters -->
-        <div class="row mt-4 g-3">
-            <div class="col-md-3"><div class="stat-card bg-black shadow-sm">Total: {{ total }}</div></div>
-            <div class="col-md-3"><div class="stat-card bg-green shadow-sm">Working: {{ working }}</div></div>
-            <div class="col-md-3"><div class="stat-card bg-yellow shadow-sm">Maintenance: {{ maintenance }}</div></div>
-            <div class="col-md-3"><div class="stat-card bg-red shadow-sm">Faulty: {{ faulty }}</div></div>
-        </div>
-
-        <!-- Search and Filter -->
-        <div class="row mt-4 g-2">
-            <div class="col-md-8"><input type="text" id="liveSearch" class="form-control" placeholder="Search Tracking No, S/N, or Agency..."></div>
-            <div class="col-md-4">
-                <select id="typeFilter" class="form-select">
-                    <option value="">All Categories</option>
-                    <option value="Laptop">Laptops</option><option value="PC">PCs</option>
-                    <option value="Monitor">Monitors</option><option value="Printer">Printers</option>
-                </select>
+    <div class="container mt-4">
+        
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card card-stats shadow-sm bg-primary text-white p-3 text-center">
+                    <h6 class="text-uppercase small">Total Assets</h6>
+                    <h2 class="fw-bold mb-0">{{ data|length }}</h2>
+                </div>
+            </div>
+            <div class="col-md-9 text-end align-self-center">
+                <a href="/add" class="btn btn-success fw-bold px-4 shadow-sm">+ Register New Asset</a>
+                
+                <a href="/export" class="btn btn-outline-dark fw-bold shadow-sm">📥 Export CSV</a>
+                
+                {% if role == 'Admin' %}
+                <a href="/admin/logs" class="btn btn-warning fw-bold shadow-sm">📜 View Activity Logs</a>
+                {% endif %}
             </div>
         </div>
 
-        <table class="table mt-3 table-hover">
-            <thead class="table-dark">
-                <tr><th>Type</th><th>Tracking No</th><th>Brand/Model</th><th>S/N</th><th>Status</th><th>Agency</th><th>Action</th></tr>
-            </thead>
-            <tbody id="assetTable">
-                {% for row in data %}
-                <tr data-type="{{ row.asset_type }}">
-                    <td><span class="badge bg-secondary">{{ row.asset_type }}</span></td>
-                    <td><strong>{{ row.tracking_number }}</strong></td>
-                    <td>{{ row.cpu_name }}</td>
-                    <td><code>{{ row.serial_number }}</code></td>
-                    <td><span class="badge {% if row.status == 'Working' %}bg-success{% elif row.status == 'Maintenance' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ row.status }}</span></td>
-                    <td>{{ row.location }}</td>
-                    <td class="d-flex gap-1">
-                        <a href="/asset/{{ row.id }}" class="btn btn-sm btn-info text-white">View</a>
-                        <a href="/edit/{{ row.id }}" class="btn btn-sm btn-warning">Edit</a>
-                        <form action="/delete/{{ row.id }}" method="POST" onsubmit="return confirm('Delete?');"><button class="btn btn-sm btn-danger">Del</button></form>
-                        <a href="/qr/{{ row.id }}" class="btn btn-sm btn-dark">QR</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="mb-0 fw-bold text-primary">Asset Inventory List</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tracking No</th>
+                            <th>Brand/Model</th>
+                            <th>Serial Number</th>
+                            <th>Location</th>
+                            <th>Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in data %}
+                        <tr class="{{ 'deleted-row' if row.is_deleted else '' }}">
+                            <td class="fw-bold">{{ row.tracking_number }}</td>
+                            <td>{{ row.cpu_name }}</td>
+                            <td><code class="text-dark">{{ row.serial_number }}</code></td>
+                            <td>{{ row.location }}</td>
+                            <td>
+                                {% if row.is_deleted %}
+                                    <span class="badge bg-secondary">DELETED / ARCHIVED</span>
+                                {% elif row.status == 'Working' %}
+                                    <span class="badge bg-success">Working</span>
+                                {% elif row.status == 'Maintenance' %}
+                                    <span class="badge bg-warning text-dark">Maintenance</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Faulty</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group shadow-sm">
+                                    <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white" title="View QR">QR</a>
+                                    <a href="/edit/{{ row.id }}" class="btn btn-sm btn-light border" title="Edit/Logs">Edit</a>
+                                    
+                                    {% if not row.is_deleted %}
+                                    <form action="/delete/{{ row.id }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                onclick="return confirm('Archive this asset for historical records?')">
+                                            Delete
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if not data %}
+        <div class="text-center mt-5 py-5 border rounded bg-white shadow-sm">
+            <p class="text-muted mb-0">No records found. Start by registering a new asset.</p>
+        </div>
+        {% endif %}
     </div>
-    <script>
-        $(document).ready(function(){
-            function filter() {
-                var s = $("#liveSearch").val().toLowerCase();
-                var t = $("#typeFilter").val().toLowerCase();
-                $("#assetTable tr").filter(function() {
-                    $(this).toggle($(this).text().toLowerCase().indexOf(s) > -1 && (t === "" || $(this).attr("data-type").toLowerCase() === t));
-                });
-            }
-            $("#liveSearch").on("keyup", filter);
-            $("#typeFilter").on("change", filter);
-        });
-    </script>
+
+    <footer class="text-center text-muted mt-5 py-3">
+        <small>&copy; 2026 JPKN Asset Tracking System - Sandakan Branch</small>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
