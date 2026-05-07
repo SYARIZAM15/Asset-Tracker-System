@@ -2,122 +2,71 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JPKN Asset Management</title>
+    <title>JPKN Asset Dashboard</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
-        body { background-color: #f8f9fa; }
-        .navbar-brand { font-weight: bold; letter-spacing: 1px; }
-        .card-stats { transition: transform 0.2s; border: none; }
-        .card-stats:hover { transform: translateY(-5px); }
-        .deleted-row { background-color: #f1f1f1 !important; color: #888; text-decoration: line-through; }
-        .badge-admin { background-color: #6f42c1; color: white; }
+        .deleted-row { background-color: #f8f9fa; color: #adb5bd; text-decoration: line-through; }
     </style>
 </head>
-<body>
-
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
-        <div class="container">
-            <a class="navbar-brand" href="/">🏢 JPKN ASSET TRACKER</a>
-            <div class="d-flex align-items-center">
-                <span class="text-light me-3 small">
-                    Logged in as: <strong>{{ session.user }}</strong> 
-                    <span class="badge {{ 'badge-admin' if role == 'Admin' else 'bg-secondary' }}">
-                        {{ role }}
-                    </span>
-                </span>
-                <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
-            </div>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark mb-4 p-3">
+        <div class="container d-flex justify-content-between">
+            <span class="navbar-brand">🏢 JPKN ASSET TRACKER</span>
+            <span class="text-white">Role: <span class="badge bg-primary">{{ role }}</span> | <a href="/logout" class="text-danger">Logout</a></span>
         </div>
     </nav>
 
-    <div class="container mt-4">
-        
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card card-stats shadow-sm bg-primary text-white p-3 text-center">
-                    <h6 class="text-uppercase small">Total Assets</h6>
-                    <h2 class="fw-bold mb-0">{{ data|length }}</h2>
+    <div class="container">
+        <div class="row g-3 mb-4 text-center">
+            <div class="col-md-3"><div class="card p-3 bg-primary text-white shadow-sm"><h6>Total</h6><h2>{{ total }}</h2></div></div>
+            <div class="col-md-3"><div class="card p-3 bg-success text-white shadow-sm"><h6>Working</h6><h2>{{ working }}</h2></div></div>
+            <div class="col-md-3"><div class="card p-3 bg-warning shadow-sm"><h6>Maintenance</h6><h2>{{ maint }}</h2></div></div>
+            <div class="col-md-3"><div class="card p-3 bg-danger text-white shadow-sm"><h6>Faulty</h6><h2>{{ faulty }}</h2></div></div>
+        </div>
+
+        <div class="card p-3 mb-4 shadow-sm">
+            <form method="GET" class="row g-2">
+                <div class="col-md-6"><input type="text" name="search" class="form-control" placeholder="Search Assets..." value="{{ s_query }}"></div>
+                <div class="col-md-4">
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option>
+                        <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC</option>
+                    </select>
                 </div>
-            </div>
-            <div class="col-md-9 text-end align-self-center">
-                <a href="/add" class="btn btn-success fw-bold px-4 shadow-sm">+ Register New Asset</a>
-                
-                <a href="/export" class="btn btn-outline-dark fw-bold shadow-sm">📥 Export CSV</a>
-                
-                {% if role == 'Admin' %}
-                <a href="/admin/logs" class="btn btn-warning fw-bold shadow-sm">📜 View Activity Logs</a>
-                {% endif %}
-            </div>
+                <div class="col-md-2"><button type="submit" class="btn btn-dark w-100">Search</button></div>
+            </form>
         </div>
 
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 fw-bold text-primary">Asset Inventory List</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Tracking No</th>
-                            <th>Brand/Model</th>
-                            <th>Serial Number</th>
-                            <th>Location</th>
-                            <th>Status</th>
-                            <th class="text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in data %}
-                        <tr class="{{ 'deleted-row' if row.is_deleted else '' }}">
-                            <td class="fw-bold">{{ row.tracking_number }}</td>
-                            <td>{{ row.cpu_name }}</td>
-                            <td><code class="text-dark">{{ row.serial_number }}</code></td>
-                            <td>{{ row.location }}</td>
-                            <td>
-                                {% if row.is_deleted %}
-                                    <span class="badge bg-secondary">DELETED / ARCHIVED</span>
-                                {% elif row.status == 'Working' %}
-                                    <span class="badge bg-success">Working</span>
-                                {% elif row.status == 'Maintenance' %}
-                                    <span class="badge bg-warning text-dark">Maintenance</span>
-                                {% else %}
-                                    <span class="badge bg-danger">Faulty</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div class="btn-group shadow-sm">
-                                    <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white" title="View QR">QR</a>
-                                    <a href="/edit/{{ row.id }}" class="btn btn-sm btn-light border" title="Edit/Logs">Edit</a>
-                                    
-                                    {% if not row.is_deleted %}
-                                    <form action="/delete/{{ row.id }}" method="POST" class="d-inline">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" 
-                                                onclick="return confirm('Archive this asset for historical records?')">
-                                            Delete
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <div class="d-flex justify-content-between mb-3">
+            <a href="/add" class="btn btn-success">+ Register New</a>
+            {% if role == 'Admin' %}<a href="/admin/logs" class="btn btn-warning">📜 View Logs</a>{% endif %}
         </div>
 
-        {% if not data %}
-        <div class="text-center mt-5 py-5 border rounded bg-white shadow-sm">
-            <p class="text-muted mb-0">No records found. Start by registering a new asset.</p>
+        <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr><th>Tracking No</th><th>Model</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr class="{{ 'deleted-row' if row.is_deleted }}">
+                        <td>{{ row.tracking_number }}</td>
+                        <td>{{ row.cpu_name }}</td>
+                        <td>{{ 'ARCHIVED' if row.is_deleted else row.status }}</td>
+                        <td>
+                            <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white">QR</a>
+                            {% if not row.is_deleted %}
+                            <form action="/delete/{{ row.id }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Archive?')">Delete</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        {% endif %}
     </div>
-
-    <footer class="text-center text-muted mt-5 py-3">
-        <small>&copy; 2026 JPKN Asset Tracking System - Sandakan Branch</small>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
