@@ -7,11 +7,11 @@ import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime
 
-# 1. Initialize the Flask App
+# Initialize the Flask App
 app = Flask(__name__)
-app.secret_key = 'jpkn_original_plus_2026'
+app.secret_key = 'jtdi_asset_tracker_2026_final'
 
-# 2. Database Configuration
+# Database Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -20,7 +20,7 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Create the table with all necessary columns
+    # Ensure table exists with all columns
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY,
         asset_type TEXT,
@@ -37,15 +37,13 @@ def init_db():
     cur.close()
     conn.close()
 
-# Initialize the database
+# Run DB initialization
 init_db()
-
-# --- ROUTES ---
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        session['user'] = request.form['username']
+        session['user'] = request.form['username'].strip()
         return redirect(url_for('index'))
     return render_template('login.html')
 
@@ -59,16 +57,16 @@ def index():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    # Base SQL Query
+    # Base Query
     query = "SELECT * FROM assets WHERE 1=1"
     params = []
 
-    # Apply Search Filter
+    # Search Logic
     if search_query:
         query += " AND (serial_number ILIKE %s OR tracking_number ILIKE %s OR cpu_name ILIKE %s)"
         params.extend([f'%{search_query}%', f'%{search_query}%', f'%{search_query}%'])
     
-    # Apply Category Filter
+    # Category Filter Logic
     if category_filter:
         query += " AND asset_type = %s"
         params.append(category_filter)
@@ -77,7 +75,7 @@ def index():
     cur.execute(query, tuple(params))
     data = cur.fetchall()
 
-    # Calculate Dashboard Stats
+    # Dashboard Statistics
     stats = {
         'total': len(data),
         'working': len([r for r in data if r['status'] == 'Working']),
@@ -152,7 +150,6 @@ def view_asset(id):
 
 @app.route('/qr/<int:id>')
 def qr_code(id):
-    # This URL is what the phone camera will open when scanning
     qr_url = url_for('view_asset', id=id, _external=True)
     img = qrcode.make(qr_url)
     buf = io.BytesIO()
