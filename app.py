@@ -8,7 +8,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = 'jtdi_secure_system_v3_2026'
+app.secret_key = 'jtdi_secure_system_v3_2026_final'
 
 # Database Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -19,13 +19,30 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Table: Assets
+    
+    # --- AUTO-FIX LOGIC ---
+    # Check if the 'email' column exists. If not, the table is outdated.
+    cur.execute("""
+        SELECT count(*) 
+        FROM information_schema.columns 
+        WHERE table_name='users' AND column_name='email';
+    """)
+    column_exists = cur.fetchone()[0]
+
+    if column_exists == 0:
+        # This nukes the old incompatible tables so the new structure can work
+        cur.execute("DROP TABLE IF EXISTS users CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS assets CASCADE;")
+        conn.commit()
+        print("OLD TABLES DROPPED: Rebuilding for Full Name/Email support.")
+
+    # --- TABLE CREATION ---
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT,
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, 
         status TEXT
     );''')
-    # Table: Users (Updated with Full Name and Email)
+
     cur.execute('''CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, 
         full_name TEXT,
@@ -35,22 +52,22 @@ def init_db():
         role TEXT NOT NULL DEFAULT 'User'
     );''')
     
-    # Auto-Reset Admin Logic (Ensures Admin exists with hashed password)
+    # --- MASTER ADMIN (admin / admin123) ---
     hashed_pw = generate_password_hash('admin123')
-    cur.execute("SELECT password FROM users WHERE username = 'admin'")
-    row = cur.fetchone()
-    if not row:
+    cur.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not cur.fetchone():
         cur.execute('''INSERT INTO users (full_name, username, email, password, role) 
                        VALUES (%s, %s, %s, %s, %s)''', 
                     ('System Administrator', 'admin', 'admin@jtdi.gov.my', hashed_pw, 'Admin'))
-    elif not row[0].startswith(('scrypt:', 'pbkdf2:')):
-        cur.execute("UPDATE users SET password = %s WHERE username = 'admin'", (hashed_pw,))
     
     conn.commit()
     cur.close()
     conn.close()
 
+# Run DB check on startup
 init_db()
+
+# --- AUTHENTICATION ---
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -98,6 +115,8 @@ def index():
     conn.close()
     return render_template('assets.html', data=data, **stats, s_query=search, c_filter=category)
 
+# --- ADMIN: USER MANAGEMENT ---
+
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -116,7 +135,7 @@ def manage_users():
             flash(f"User {fn} created!")
         except Exception as e:
             conn.rollback()
-            flash(f"Error: {e}")
+            flash("Error: Username already exists.")
     cur.execute("SELECT * FROM users ORDER BY id ASC")
     users = cur.fetchall()
     cur.close()
@@ -139,6 +158,8 @@ def delete_user(user_id):
     conn.close()
     return redirect(url_for('manage_users'))
 
+# --- ASSETS ---
+
 @app.route('/add', methods=['GET', 'POST'])
 def add():
     if 'user' not in session: return redirect(url_for('login'))
@@ -157,26 +178,6 @@ def add():
         conn.close()
         return redirect(url_for('index'))
     return render_template('add.html')
-
-@app.route('/view/<int:id>')
-def view_asset(id):
-    if 'user' not in session: return redirect(url_for('login'))
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
-    asset = cur.fetchone()
-    cur.close()
-    conn.close()
-    return render_template('view.html', asset=asset)
-
-@app.route('/qr/<int:id>')
-def qr_code(id):
-    qr_url = url_for('view_asset', id=id, _external=True)
-    img = qrcode.make(qr_url)
-    buf = io.BytesIO()
-    img.save(buf)
-    qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-    return render_template('qr_display.html', qr_code=qr_b64, id=id)
 
 @app.route('/logout')
 def logout():
