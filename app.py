@@ -1,10 +1,12 @@
 import os, io, qrcode, base64, psycopg2, psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
-app.secret_key = 'jtdi_final_master_v9_2026'
+app.secret_key = 'jtdi_absolute_final_fix_2026'
+app.permanent_session_lifetime = timedelta(hours=8)
+
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -38,6 +40,7 @@ def login():
         cur.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cur.fetchone()
         if user and check_password_hash(user['password'], password):
+            session.permanent = True
             session.update({'user': user['username'], 'full_name': user['full_name'], 'role': user['role']})
             cur.execute("INSERT INTO login_logs (full_name, email) VALUES (%s, %s)", (user['full_name'], user['email']))
             conn.commit(); cur.close(); conn.close()
@@ -68,15 +71,6 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-@app.route('/admin/logs')
-def view_logs():
-    if session.get('role') != 'Admin': return redirect(url_for('index'))
-    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 500")
-    logs = cur.fetchall(); cur.close(); conn.close()
-    return render_template('login_logs.html', logs=logs)
-
-# --- INVENTORY ACTIONS ---
 @app.route('/add', methods=['GET', 'POST'])
 def add():
     if 'user' not in session: return redirect(url_for('login'))
@@ -98,11 +92,24 @@ def edit(id):
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
 
+@app.route('/view/<int:id>')
+def view_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
+    return render_template('view.html', asset=asset)
+
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(); cur.execute("DELETE FROM assets WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close()
     return redirect(url_for('index'))
+
+@app.route('/qr/<int:id>')
+def qr_code(id):
+    qr_url = url_for('view_asset', id=id, _external=True)
+    img = qrcode.make(qr_url); buf = io.BytesIO(); img.save(buf); qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    return render_template('qr_display.html', qr_code=qr_b64, id=id)
 
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
@@ -110,10 +117,26 @@ def manage_users():
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
-        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", (request.form.get('full_name'), request.form.get('username'), request.form.get('email').strip().lower(), pw, request.form.get('role')))
-        conn.commit()
+        try:
+            cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", (request.form.get('full_name'), request.form.get('username'), request.form.get('email').strip().lower(), pw, request.form.get('role')))
+            conn.commit(); flash("User Registered!")
+        except: flash("Error: Account exists.")
     cur.execute("SELECT * FROM users ORDER BY id ASC"); users = cur.fetchall(); cur.close(); conn.close()
     return render_template('manage_users.html', users=users)
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+def delete_user(user_id):
+    if session.get('role') == 'Admin':
+        conn = get_db_connection(); cur = conn.cursor(); cur.execute("DELETE FROM users WHERE id = %s", (user_id,)); conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('manage_users'))
+
+@app.route('/admin/logs')
+def view_logs():
+    if session.get('role') != 'Admin': return redirect(url_for('index'))
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 500")
+    logs = cur.fetchall(); cur.close(); conn.close()
+    return render_template('login_logs.html', logs=logs)
 
 @app.route('/logout')
 def logout():
