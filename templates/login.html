@@ -2,36 +2,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>JTDI - Login Logs</title>
+    <title>JTDI Logs</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
-        :root { --jtdi-navy: #1a2a6c; --jtdi-gold: #ffc107; }
-        .header { background: var(--jtdi-navy); color: white; padding: 20px; border-bottom: 4px solid var(--jtdi-gold); }
+        :root { --navy: #1a2a6c; --gold: #ffc107; }
+        .header { background: var(--navy); color: white; padding: 20px; border-bottom: 4px solid var(--gold); }
     </style>
 </head>
 <body class="bg-light">
-    <div class="header shadow mb-4">
+    <div class="header shadow-sm mb-4">
         <div class="container d-flex justify-content-between align-items-center">
             <h4 class="mb-0 fw-bold">📜 SYSTEM ACCESS LOGS</h4>
-            <a href="/" class="btn btn-warning btn-sm fw-bold">Back to Dashboard</a>
+            <a href="{{ url_for('index') }}" class="btn btn-warning fw-bold shadow-sm">Back to Dashboard</a>
         </div>
     </div>
     <div class="container">
         <div class="card shadow border-0 p-4 rounded-4">
-            <table class="table table-hover">
-                <thead class="table-dark">
-                    <tr><th>Staff Name</th><th>Email</th><th>Time of Entry</th></tr>
-                </thead>
-                <tbody>
-                    {% for log in logs %}
-                    <tr>
-                        <td class="fw-bold">{{ log.full_name }}</td>
-                        <td class="small">{{ log.email }}</td>
-                        <td><span class="badge bg-light text-dark border">{{ log.login_time.strftime('%Y-%m-%d | %I:%M %p') }}</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr><th>Staff Name</th><th>Email</th><th>Login Time</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td class="fw-bold">{{ log.full_name }}</td>
+                            <td>{{ log.email }}</td>
+                            <td>{{ log.login_time.strftime('%Y-%m-%d | %I:%M %p') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </body>
