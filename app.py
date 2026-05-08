@@ -8,7 +8,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = 'jtdi_secure_system_2026_final'
+app.secret_key = 'jtdi_secure_system_v3_2026'
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
@@ -24,18 +24,24 @@ def init_db():
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, 
         status TEXT
     );''')
-    # Table: Users
+    # Table: Users (Updated with Full Name and Email)
     cur.execute('''CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, 
-        password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User'
+        id SERIAL PRIMARY KEY, 
+        full_name TEXT,
+        username TEXT UNIQUE NOT NULL, 
+        email TEXT,
+        password TEXT NOT NULL, 
+        role TEXT NOT NULL DEFAULT 'User'
     );''')
     
-    # Auto-Reset Admin Logic
+    # Auto-Reset Admin Logic (Ensures Admin exists with hashed password)
     hashed_pw = generate_password_hash('admin123')
     cur.execute("SELECT password FROM users WHERE username = 'admin'")
     row = cur.fetchone()
     if not row:
-        cur.execute("INSERT INTO users (username, password, role) VALUES ('admin', %s, 'Admin')", (hashed_pw,))
+        cur.execute('''INSERT INTO users (full_name, username, email, password, role) 
+                       VALUES (%s, %s, %s, %s, %s)''', 
+                    ('System Administrator', 'admin', 'admin@jtdi.gov.my', hashed_pw, 'Admin'))
     elif not row[0].startswith(('scrypt:', 'pbkdf2:')):
         cur.execute("UPDATE users SET password = %s WHERE username = 'admin'", (hashed_pw,))
     
@@ -58,6 +64,7 @@ def login():
         conn.close()
         if user and check_password_hash(user['password'], password):
             session['user'] = user['username']
+            session['full_name'] = user['full_name']
             session['role'] = user['role']
             return redirect(url_for('index'))
         flash("Invalid Credentials. Please try again.")
@@ -96,11 +103,16 @@ def manage_users():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
-        new_u, new_p, new_r = request.form.get('username'), generate_password_hash(request.form.get('password')), request.form.get('role')
+        fn = request.form.get('full_name')
+        un = request.form.get('username').strip()
+        em = request.form.get('email')
+        pw = generate_password_hash(request.form.get('password'))
+        ro = request.form.get('role')
         try:
-            cur.execute("INSERT INTO users (username, password, role) VALUES (%s, %s, %s)", (new_u, new_p, new_r))
+            cur.execute('''INSERT INTO users (full_name, username, email, password, role) 
+                           VALUES (%s, %s, %s, %s, %s)''', (fn, un, em, pw, ro))
             conn.commit()
-            flash(f"User {new_u} created!")
+            flash(f"User {fn} created!")
         except: flash("Username already exists!")
     cur.execute("SELECT * FROM users ORDER BY id ASC")
     users = cur.fetchall()
