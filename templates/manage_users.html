@@ -1,47 +1,145 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Manage Staff</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Management - JTDI</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        :root { --jtdi-navy: #1a2a6c; --jtdi-gold: #ffc107; --jtdi-light: #f8f9fa; }
+        body { background-color: var(--jtdi-light); font-family: 'Segoe UI', sans-serif; }
+        
+        /* Modern Navbar with Gold Accent */
+        .navbar { 
+            background: linear-gradient(90deg, #1a2a6c 0%, #203a43 100%); 
+            border-bottom: 4px solid var(--jtdi-gold); 
+        }
+        
+        .card-custom { 
+            border: none; 
+            border-radius: 15px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+        }
+
+        .table-container { 
+            background: white; 
+            border-radius: 12px; 
+            overflow: hidden; 
+        }
+
+        .btn-jtdi { background-color: var(--jtdi-navy); color: white; font-weight: 600; }
+        .btn-jtdi:hover { background-color: #0056b3; color: white; }
+        
+        .badge-admin { background-color: var(--jtdi-gold); color: black; font-weight: bold; }
+        .badge-user { background-color: #17a2b8; color: white; font-weight: bold; }
+    </style>
 </head>
-<body class="bg-light">
-    <nav class="navbar navbar-dark bg-dark p-3 mb-4"><div class="container d-flex justify-content-between"><h4 class="text-white mb-0">USER MANAGEMENT</h4><a href="/" class="btn btn-warning btn-sm">Back</a></div></nav>
+<body>
+
+    <nav class="navbar navbar-dark mb-4 p-3 shadow">
+        <div class="container d-flex justify-content-between align-items-center">
+            <a class="navbar-brand fw-bold" href="/">
+                <span style="color: var(--jtdi-gold);">JTDI</span> STAFF MANAGEMENT
+            </a>
+            <a href="/" class="btn btn-outline-warning fw-bold btn-sm">BACK TO DASHBOARD</a>
+        </div>
+    </nav>
+
     <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info alert-dismissible fade show rounded-3 shadow-sm border-0" role="alert">
+                        <strong>System Notice:</strong> {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         <div class="row g-4">
-            <div class="col-md-4">
-                <div class="card p-4 shadow border-0">
-                    <h5 class="fw-bold">Register Staff</h5>
-                    <form method="POST">
-                        <input type="text" name="full_name" placeholder="Full Name" class="form-control mb-2" required>
-                        <input type="text" name="username" placeholder="Username" class="form-control mb-2" required>
-                        <input type="email" name="email" placeholder="Email" class="form-control mb-2" required>
-                        <input type="password" name="password" placeholder="Password" class="form-control mb-2" required>
-                        <select name="role" class="form-select mb-3"><option value="User">User</option><option value="Admin">Admin</option></select>
-                        <button class="btn btn-primary w-100">Add Staff</button>
+            <div class="col-lg-4">
+                <div class="card card-custom p-4">
+                    <h5 class="fw-bold mb-4 text-center" style="color: var(--jtdi-navy);">Register New Staff</h5>
+                    <form action="/admin/users" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Full Name</label>
+                            <input type="text" name="full_name" class="form-control" placeholder="e.g. Fakhrul" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Username</label>
+                            <input type="text" name="username" class="form-control" placeholder="e.g. fakhrul2026" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Email Address</label>
+                            <input type="email" name="email" class="form-control" placeholder="staff@jtdi.gov.my" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Initial Password</label>
+                            <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted">Access Level (Role)</label>
+                            <select name="role" class="form-select">
+                                <option value="User">User (Inventory only)</option>
+                                <option value="Admin">Admin (Full Control)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-jtdi w-100 py-2 shadow-sm">ADD STAFF MEMBER</button>
                     </form>
                 </div>
             </div>
-            <div class="col-md-8">
-                <div class="card shadow border-0">
-                    <div class="card-header bg-dark text-white fw-bold">Active Staff Directory</div>
-                    <table class="table table-hover align-middle">
-                        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th class="text-center">Action</th></tr></thead>
-                        <tbody>
-                            {% for u in users %}
-                            <tr>
-                                <td><span class="fw-bold text-primary">{{ u.full_name }}</span><br><small class="text-muted">@{{ u.username }}</small></td>
-                                <td>{{ u.email }}</td>
-                                <td><span class="badge {{ 'bg-warning text-dark' if u.role == 'Admin' else 'bg-info text-white' }}">{{ u.role }}</span></td>
-                                <td class="text-center">
-                                    {% if u.username != session.user %}<form action="/admin/delete_user/{{ u.id }}" method="POST"><button class="btn btn-sm btn-outline-danger">Remove</button></form>{% else %}<span class="badge bg-secondary">Current</span>{% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+
+            <div class="col-lg-8">
+                <div class="card card-custom overflow-hidden">
+                    <div class="card-header bg-dark text-white p-3">
+                        <h6 class="mb-0 fw-bold">Active Staff Directory</h6>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4">Staff Details</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th class="text-center">Manage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for u in users %}
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-bold" style="color: var(--jtdi-navy);">{{ u.full_name }}</div>
+                                        <small class="text-muted">ID: {{ u.username }}</small>
+                                    </td>
+                                    <td>{{ u.email }}</td>
+                                    <td>
+                                        <span class="badge {{ 'badge-admin' if u.role == 'Admin' else 'badge-user' }}">
+                                            {{ u.role }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if u.username != session.user %}
+                                        <form action="/admin/delete_user/{{ u.id }}" method="POST" onsubmit="return confirm('Permanently remove this staff member?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                        </form>
+                                        {% else %}
+                                        <span class="badge bg-secondary text-white small">Current User</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="mt-3 text-muted small">
+                    <p><em>* Admins can add/remove staff. Users can only view and manage inventory.</em></p>
                 </div>
             </div>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
