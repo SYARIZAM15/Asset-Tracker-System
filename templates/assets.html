@@ -1,32 +1,112 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>JTDI Asset Tracker</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JTDI Asset Management System</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <style>:root{--navy:#1a2a6c;--gold:#ffc107;} .navbar{background:var(--navy); border-bottom:4px solid var(--gold);}</style>
+    <style>
+        :root { --navy: #1a2a6c; --gold: #ffc107; --light: #f8f9fa; }
+        body { background-color: var(--light); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Modern Navbar with Gold Accent */
+        .navbar { 
+            background: linear-gradient(90deg, #1a2a6c 0%, #203a43 100%); 
+            border-bottom: 4px solid var(--gold); 
+        }
+        
+        /* Dashboard Stats Cards */
+        .stat-card { 
+            border: none; 
+            border-radius: 15px; 
+            color: white; 
+            transition: transform 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        
+        /* Search & Filter Section */
+        .filter-section {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        /* Inventory Table Styling */
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .table thead { background-color: #212529; color: white; }
+        .badge-working { background-color: #28a745; }
+        .badge-maintenance { background-color: #ffc107; color: #000; }
+        .badge-faulty { background-color: #dc3545; }
+    </style>
 </head>
-<body class="bg-light">
-    <nav class="navbar navbar-dark p-3 mb-4 shadow"><div class="container d-flex justify-content-between align-items-center">
-        <a class="navbar-brand fw-bold" href="/">JTDI ASSET TRACKER</a>
-        <div class="text-white small">User: <b>{{ session.full_name }}</b> | <a href="/logout" class="text-warning">Logout</a></div>
-    </div></nav>
+<body>
+
+    <nav class="navbar navbar-dark mb-4 p-3 shadow">
+        <div class="container d-flex justify-content-between align-items-center">
+            <a class="navbar-brand fw-bold" href="/">
+                <span style="color: var(--gold);">JTDI</span> ASSET TRACKER
+            </a>
+            <div class="text-white small">
+                Welcome, <span class="fw-bold text-warning">{{ session.full_name }}</span> 
+                <span class="mx-2">|</span>
+                <a href="/logout" class="btn btn-sm btn-outline-light">Logout</a>
+            </div>
+        </div>
+    </nav>
 
     <div class="container">
-        <div class="row g-4 mb-4 text-center text-white">
-            <div class="col-md-3"><div class="card p-3 bg-primary"><h6>TOTAL ASSETS</h6><h3>{{ total }}</h3></div></div>
-            <div class="col-md-3"><div class="card p-3 bg-success"><h6>WORKING</h6><h3>{{ working }}</h3></div></div>
-            <div class="col-md-3"><div class="card p-3 bg-warning text-dark"><h6>MAINTENANCE</h6><h3>{{ maint }}</h3></div></div>
-            <div class="col-md-3"><div class="card p-3 bg-danger"><h6>FAULTY</h6><h3>{{ faulty }}</h3></div></div>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row g-4 mb-4 text-center">
+            <div class="col-md-3">
+                <div class="card stat-card p-3 bg-primary">
+                    <h6 class="text-uppercase small fw-bold">Total Assets</h6>
+                    <h2 class="mb-0">{{ total }}</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card p-3 bg-success">
+                    <h6 class="text-uppercase small fw-bold">Working</h6>
+                    <h2 class="mb-0">{{ working }}</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card p-3 bg-warning text-dark">
+                    <h6 class="text-uppercase small fw-bold">Maintenance</h6>
+                    <h2 class="mb-0">{{ maint }}</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card p-3 bg-danger">
+                    <h6 class="text-uppercase small fw-bold">Faulty</h6>
+                    <h2 class="mb-0">{{ faulty }}</h2>
+                </div>
+            </div>
         </div>
 
-        <div class="card p-4 mb-4 shadow-sm border-0 rounded-4">
+        <div class="filter-section p-4 mb-4">
             <form method="GET" action="/" class="row g-3 align-items-end">
                 <div class="col-md-5">
-                    <label class="form-label small fw-bold">Search Asset</label>
-                    <input type="text" name="search" class="form-control" placeholder="S/N or Tracking ID..." value="{{ s_query }}">
+                    <label class="form-label small fw-bold text-muted">Search Inventory</label>
+                    <input type="text" name="search" class="form-control" placeholder="Search S/N, Tracking ID, or Model..." value="{{ s_query }}">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold">Category</label>
+                    <label class="form-label small fw-bold text-muted">Filter by Category</label>
                     <select name="category" class="form-select">
                         <option value="">All Categories</option>
                         <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option>
@@ -35,50 +115,73 @@
                         <option value="Printer" {{ 'selected' if c_filter == 'Printer' }}>Printer</option>
                     </select>
                 </div>
-                <div class="col-md-3"><button type="submit" class="btn btn-primary w-100 fw-bold">Filter Results</button></div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm">FILTER RESULTS</button>
+                </div>
             </form>
         </div>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="fw-bold">Inventory List</h4>
-            <div class="btn-group">
+            <h4 class="fw-bold mb-0" style="color: var(--navy);">Inventory List</h4>
+            <div class="btn-group shadow-sm">
                 {% if session.role == 'Admin' %}
-                    <a href="/admin/users" class="btn btn-warning btn-sm fw-bold">USERS</a>
-                    <a href="/admin/logs" class="btn btn-info btn-sm text-white fw-bold">LOGS</a>
+                    <a href="/admin/users" class="btn btn-warning btn-sm fw-bold">MANAGE USERS</a>
+                    <a href="{{ url_for('view_logs') }}" class="btn btn-info btn-sm text-white fw-bold">SYSTEM LOGS</a>
                 {% endif %}
                 <a href="/add" class="btn btn-success btn-sm fw-bold">+ NEW ENTRY</a>
             </div>
         </div>
 
-        <div class="bg-white rounded shadow-sm border overflow-hidden">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-dark">
-                    <tr><th>Tracking #</th><th>Details</th><th>Status</th><th class="text-center">Manage</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in data %}
-                    <tr>
-                        <td class="ps-3 fw-bold text-primary">{{ row.tracking_number }}</td>
-                        <td>
-                            <b>{{ row.cpu_name }}</b><br>
-                            <small class="text-muted">S/N: {{ row.serial_number }}</small>
-                        </td>
-                        <td><span class="badge {{ 'bg-success' if row.status == 'Working' else 'bg-warning' if row.status == 'Maintenance' else 'bg-danger' }}">{{ row.status }}</span></td>
-                        <td class="text-center">
-                            <div class="btn-group">
-                                <a href="/view/{{ row.id }}" class="btn btn-sm btn-outline-primary">View</a>
-                                <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-dark">Edit</a>
-                                <a href="/qr/{{ row.id }}" class="btn btn-sm btn-dark">QR</a>
-                                <form action="{{ url_for('delete_asset', id=row.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Permanently delete this asset?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Del</button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="table-container">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Tracking ID</th>
+                            <th>Model Details</th>
+                            <th>Location</th>
+                            <th>Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in data %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-primary">{{ row.tracking_number }}</td>
+                            <td>
+                                <div class="fw-bold">{{ row.cpu_name }}</div>
+                                <small class="text-muted">S/N: {{ row.serial_number }}</small>
+                            </td>
+                            <td>{{ row.location }}</td>
+                            <td>
+                                <span class="badge {{ 'badge-working' if row.status == 'Working' else 'badge-maintenance' if row.status == 'Maintenance' else 'badge-faulty' }} shadow-sm">
+                                    {{ row.status }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="/view/{{ row.id }}" class="btn btn-outline-primary" title="View Details">View</a>
+                                    <a href="/edit/{{ row.id }}" class="btn btn-outline-dark" title="Edit Asset">Edit</a>
+                                    <a href="/qr/{{ row.id }}" class="btn btn-dark" title="Generate QR">QR</a>
+                                    
+                                    <form action="{{ url_for('delete_asset', id=row.id) }}" method="POST" class="d-inline" onsubmit="return confirm('WARNING: Permanently delete this asset?');">
+                                        <button type="submit" class="btn btn-outline-danger">Del</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if not data %}
+            <div class="p-5 text-center text-muted">
+                <h5>No assets found matching your criteria.</h5>
+            </div>
+            {% endif %}
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
