@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = 'jtdi_ultimate_secure_2026'
+app.secret_key = 'jtdi_secure_email_system_2026'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -11,16 +11,22 @@ def get_db_connection():
 
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
+    # Auto-Fix: Drop tables if the new 'email' column is missing
     cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_name='users' AND column_name='email';")
     if cur.fetchone()[0] == 0:
         cur.execute("DROP TABLE IF EXISTS users CASCADE; DROP TABLE IF EXISTS assets CASCADE;")
         conn.commit()
+    
+    # Create Tables
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT, serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, status TEXT);''')
-    cur.execute('''CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, email TEXT, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
+    cur.execute('''CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
+    
+    # Default Admin (Login: admin@jtdi.gov.my / admin123)
     hashed_pw = generate_password_hash('admin123')
-    cur.execute("SELECT * FROM users WHERE username = 'admin'")
+    cur.execute("SELECT * FROM users WHERE email = 'admin@jtdi.gov.my'")
     if not cur.fetchone():
-        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", ('System Administrator', 'admin', 'admin@jtdi.gov.my', hashed_pw, 'Admin'))
+        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", 
+                    ('System Administrator', 'admin', 'admin@jtdi.gov.my', hashed_pw, 'Admin'))
     conn.commit(); cur.close(); conn.close()
 
 init_db()
@@ -28,14 +34,15 @@ init_db()
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        un, pw = request.form.get('username', '').strip(), request.form.get('password', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '').strip()
         conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT * FROM users WHERE username = %s", (un,))
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cur.fetchone(); cur.close(); conn.close()
-        if user and check_password_hash(user['password'], pw):
+        if user and check_password_hash(user['password'], password):
             session.update({'user': user['username'], 'full_name': user['full_name'], 'role': user['role']})
             return redirect(url_for('index'))
-        flash("Invalid login.")
+        flash("Invalid Email or Password.")
     return render_template('login.html')
 
 @app.route('/')
@@ -68,6 +75,7 @@ def add():
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
+    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
         cur.execute("UPDATE assets SET asset_type=%s, cpu_name=%s, ram_size=%s, storage_type=%s, status=%s, location=%s WHERE id=%s", (request.form.get('asset_type'), request.form.get('cpu_name'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location'), id))
@@ -77,12 +85,14 @@ def edit(id):
 
 @app.route('/view/<int:id>')
 def view_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('view.html', asset=asset)
 
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(); cur.execute("DELETE FROM assets WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
 
 @app.route('/qr/<int:id>')
@@ -98,16 +108,22 @@ def manage_users():
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
         try:
-            cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
-            conn.commit()
-        except: flash("Exists!")
+            cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", (request.form.get('full_name'), request.form.get('username'), request.form.get('email').strip().lower(), pw, request.form.get('role')))
+            conn.commit(); flash("User Registered!")
+        except: flash("Error: Username or Email already exists.")
     cur.execute("SELECT * FROM users ORDER BY id ASC"); users = cur.fetchall(); cur.close(); conn.close()
     return render_template('manage_users.html', users=users)
 
 @app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
     if session.get('role') == 'Admin':
-        conn = get_db_connection(); cur = conn.cursor(); cur.execute("DELETE FROM users WHERE id = %s", (user_id,)); conn.commit(); cur.close(); conn.close()
+        conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+        target = cur.fetchone()
+        if target and target['username'] != session['user']:
+            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            conn.commit()
+        cur.close(); conn.close()
     return redirect(url_for('manage_users'))
 
 @app.route('/logout')
