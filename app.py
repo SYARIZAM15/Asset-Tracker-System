@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.secret_key = 'jtdi_secure_system_v3_2026'
 
+# Database Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -113,7 +114,9 @@ def manage_users():
                            VALUES (%s, %s, %s, %s, %s)''', (fn, un, em, pw, ro))
             conn.commit()
             flash(f"User {fn} created!")
-        except: flash("Username already exists!")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Error: {e}")
     cur.execute("SELECT * FROM users ORDER BY id ASC")
     users = cur.fetchall()
     cur.close()
@@ -154,6 +157,26 @@ def add():
         conn.close()
         return redirect(url_for('index'))
     return render_template('add.html')
+
+@app.route('/view/<int:id>')
+def view_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM assets WHERE id = %s', (id,))
+    asset = cur.fetchone()
+    cur.close()
+    conn.close()
+    return render_template('view.html', asset=asset)
+
+@app.route('/qr/<int:id>')
+def qr_code(id):
+    qr_url = url_for('view_asset', id=id, _external=True)
+    img = qrcode.make(qr_url)
+    buf = io.BytesIO()
+    img.save(buf)
+    qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    return render_template('qr_display.html', qr_code=qr_b64, id=id)
 
 @app.route('/logout')
 def logout():
