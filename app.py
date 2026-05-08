@@ -12,18 +12,27 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
-# --- INITIALIZE DATABASE (Fixes Log & User Tables) ---
+# --- DATABASE REPAIR & INIT (Fixes Log Error) ---
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
+    # Ensure Asset Table
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT, 
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, status TEXT);''')
+    # Ensure User Table
     cur.execute('''CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, 
         email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
-    # FIX: Ensures the log table exists with correct columns
+    # Ensure Login Logs Table (The fix for your error)
     cur.execute('''CREATE TABLE IF NOT EXISTS login_logs (
         id SERIAL PRIMARY KEY, full_name TEXT, email TEXT, login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
+    
+    # Create Default Admin if empty
+    cur.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not cur.fetchone():
+        hashed_pw = generate_password_hash('admin123')
+        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)",
+                    ('System Administrator', 'admin', 'admin@jtdi.gov.my', hashed_pw, 'Admin'))
     conn.commit(); cur.close(); conn.close()
 
 init_db()
@@ -87,7 +96,7 @@ def delete_asset(id):
     conn = get_db_connection(); cur = conn.cursor(); cur.execute("DELETE FROM assets WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close()
     return redirect(url_for('index'))
 
-# --- 4. LOGS (FIXED) ---
+# --- 4. LOGS (FIXED ROUTE) ---
 @app.route('/admin/logs')
 def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -111,12 +120,14 @@ def manage_users():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email').strip().lower()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
         conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cur.fetchone()
-        if user and check_password_hash(user['password'], request.form.get('password')):
+        if user and check_password_hash(user['password'], password):
             session.update({'user': user['username'], 'role': user['role'], 'full_name': user['full_name']})
+            # LOG THE LOGIN
             cur.execute("INSERT INTO login_logs (full_name, email) VALUES (%s, %s)", (user['full_name'], user['email']))
             conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     return render_template('login.html')
