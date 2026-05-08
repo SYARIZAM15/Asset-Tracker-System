@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = 'jtdi_ultimate_master_v5_2026'
+app.secret_key = 'jtdi_ultimate_master_v7_2026'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
@@ -12,7 +12,7 @@ def get_db_connection():
 
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
-    # Ensure all tables exist with correct columns
+    # Ensure database is synced with new columns
     cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_name='users' AND column_name='email';")
     if cur.fetchone()[0] == 0:
         cur.execute("DROP TABLE IF EXISTS users CASCADE; DROP TABLE IF EXISTS assets CASCADE; DROP TABLE IF EXISTS login_logs CASCADE;")
@@ -22,7 +22,7 @@ def init_db():
     cur.execute('''CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
     cur.execute('''CREATE TABLE IF NOT EXISTS login_logs (id SERIAL PRIMARY KEY, full_name TEXT, email TEXT, login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
     
-    # Initial Admin: admin@jtdi.gov.my / admin123
+    # Master Admin (Login: admin@jtdi.gov.my / admin123)
     hashed_pw = generate_password_hash('admin123')
     cur.execute("SELECT * FROM users WHERE email = 'admin@jtdi.gov.my'")
     if not cur.fetchone():
@@ -42,7 +42,6 @@ def login():
         user = cur.fetchone()
         if user and check_password_hash(user['password'], password):
             session.update({'user': user['username'], 'full_name': user['full_name'], 'role': user['role']})
-            # Log the login
             cur.execute("INSERT INTO login_logs (full_name, email) VALUES (%s, %s)", (user['full_name'], user['email']))
             conn.commit(); cur.close(); conn.close()
             return redirect(url_for('index'))
@@ -121,7 +120,7 @@ def manage_users():
         try:
             cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", (request.form.get('full_name'), request.form.get('username'), request.form.get('email').strip().lower(), pw, request.form.get('role')))
             conn.commit(); flash("Staff registered!")
-        except: flash("Error: Duplicate username/email.")
+        except: flash("Error: Email/User exists.")
     cur.execute("SELECT * FROM users ORDER BY id ASC"); users = cur.fetchall(); cur.close(); conn.close()
     return render_template('manage_users.html', users=users)
 
