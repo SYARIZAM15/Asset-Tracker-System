@@ -5,34 +5,98 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
         :root { --jtdi-navy: #1a2a6c; --jtdi-gold: #ffc107; }
-        .navbar { background: var(--jtdi-navy); border-bottom: 4px solid var(--jtdi-gold); }
-        .card-stats { border: none; border-radius: 15px; color: white; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+        .navbar { background: linear-gradient(90deg, #1a2a6c 0%, #203a43 100%); border-bottom: 4px solid var(--jtdi-gold); } [cite: 19]
+        .card-stats { border: none; border-radius: 15px; color: white; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); } [cite: 20, 21]
     </style>
 </head>
-<body class="bg-light">
+<body>
     <nav class="navbar navbar-dark mb-4 p-3 shadow">
         <div class="container d-flex justify-content-between align-items-center">
-            <a class="navbar-brand fw-bold" href="/">JTDI ASSET TRACKER</a>
+            <a class="navbar-brand fw-bold" href="/"><span style="color: var(--jtdi-gold);">JTDI</span> ASSET TRACKER</a> [cite: 30]
             <div class="text-white small">
-                User: <span class="badge bg-warning text-dark">{{ session.full_name }}</span>
-                <a href="/logout" class="btn btn-outline-light btn-sm ms-3">Sign Out</a>
+                User: <span class="badge bg-light text-dark">{{ session.full_name }}</span> [cite: 31]
+                <a href="/logout" class="btn btn-outline-warning btn-sm ms-3">Sign Out</a> [cite: 31]
             </div>
         </div>
     </nav>
+
     <div class="container">
         <div class="row g-4 mb-5 text-center">
-            <div class="col-md-3"><div class="card card-stats p-4 bg-primary"><h6>Total</h6><h2>{{ total }}</h2></div></div>
-            <div class="col-md-3"><div class="card card-stats p-4 bg-success"><h6>Working</h6><h2>{{ working }}</h2></div></div>
-            <div class="col-md-3"><div class="card card-stats p-4 bg-warning text-dark"><h6>Maintenance</h6><h2>{{ maint }}</h2></div></div>
-            <div class="col-md-3"><div class="card card-stats p-4 bg-danger"><h6>Faulty</h6><h2>{{ faulty }}</h2></div></div>
+            <div class="col-md-3"><div class="card card-stats p-4 bg-primary"><h6>Total Inventory</h6><h2>{{ total }}</h2></div></div> [cite: 32]
+            <div class="col-md-3"><div class="card card-stats p-4 bg-success"><h6>Operational</h6><h2>{{ working }}</h2></div></div> [cite: 33]
+            <div class="col-md-3"><div class="card card-stats p-4 bg-warning text-dark"><h6>Maintenance</h6><h2>{{ maint }}</h2></div></div> [cite: 34]
+            <div class="col-md-3"><div class="card card-stats p-4 bg-danger"><h6>Faulty/Down</h6><h2>{{ faulty }}</h2></div></div> [cite: 35]
         </div>
+
+        <div class="card p-4 mb-4 shadow-sm border-0 rounded-4">
+            <form method="GET" action="/" class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label fw-bold text-muted">Search Asset</label>
+                    <input type="text" name="search" class="form-control" placeholder="S/N or Model..." value="{{ s_query }}"> [cite: 37]
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold text-muted">Category List</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Equipment</option> [cite: 38]
+                        <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC / Desktop</option> [cite: 38]
+                        <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option> [cite: 38]
+                        <option value="Monitor" {{ 'selected' if c_filter == 'Monitor' }}>Monitor</option> [cite: 39]
+                        <option value="Printer" {{ 'selected' if c_filter == 'Printer' }}>Printer</option> [cite: 39]
+                    </select>
+                </div>
+                <div class="col-md-3"><button type="submit" class="btn btn-primary w-100 fw-bold">Filter Results</button></div> [cite: 40]
+            </form>
+        </div>
+
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="fw-bold">Inventory List</h4>
+            <h4 class="fw-bold" style="color: var(--jtdi-navy);">Inventory Overview</h4> [cite: 40]
             <div class="btn-group">
-                {% if session.role == 'Admin' %}<a href="/admin/users" class="btn btn-warning fw-bold">USERS</a><a href="/admin/logs" class="btn btn-info text-white fw-bold">LOGS</a>{% endif %}
-                <a href="/add" class="btn btn-success fw-bold">+ NEW ENTRY</a>
+                {% if session.role == 'Admin' %}
+                    <a href="/admin/users" class="btn btn-warning fw-bold">USERS</a>
+                    <a href="/admin/logs" class="btn btn-info text-white fw-bold">LOGS</a>
+                {% endif %}
+                <a href="/add" class="btn btn-success fw-bold">+ NEW ENTRY</a> [cite: 41]
             </div>
         </div>
+
+        <div class="table-responsive bg-white rounded shadow-sm border">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="ps-4">Tracking Number</th> [cite: 42]
+                        <th>Category</th> [cite: 42]
+                        <th>Model Details</th> [cite: 42]
+                        <th>Status</th> [cite: 42]
+                        <th class="text-center pe-4">Manage</th> [cite: 43]
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-primary">{{ row.tracking_number }}</td> [cite: 44]
+                        <td><span class="badge bg-secondary">{{ row.asset_type }}</span></td> [cite: 44]
+                        <td>{{ row.cpu_name }}</td> [cite: 44]
+                        <td>
+                            {% if row.status == 'Working' %}<span class="text-success fw-bold">● Working</span> [cite: 45]
+                            {% elif row.status == 'Maintenance' %}<span class="text-warning fw-bold">● Maintenance</span> [cite: 46]
+                            {% else %}<span class="text-danger fw-bold">● Faulty</span>{% endif %} [cite: 47]
+                        </td>
+                        <td class="text-center pe-4">
+                            <div class="btn-group">
+                                <a href="/view/{{ row.id }}" class="btn btn-sm btn-outline-primary">View</a> [cite: 48]
+                                <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-dark">Edit</a> [cite: 48, 49]
+                                <a href="/qr/{{ row.id }}" class="btn btn-sm btn-dark">QR</a> [cite: 49]
+                                <form action="/delete/{{ row.id }}" method="POST" class="d-inline" onsubmit="return confirm('Delete permanently?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Del</button> [cite: 50]
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+    </div>
 </body>
 </html>
