@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<assets html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,98 +7,83 @@
     <style>
         :root { --jtdi-navy: #1a2a6c; --jtdi-gold: #ffc107; }
         body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
-        .navbar { background: linear-gradient(90deg, #1a2a6c 0%, #203a43 100%); border-bottom: 4px solid var(--jtdi-gold); } /* [cite: 17] */
-        .card-stats { border: none; border-radius: 15px; color: white; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); } /* [cite: 18, 19] */
-        .bg-jtdi-main { background-color: var(--jtdi-navy); } /* [cite: 21] */
-        .bg-jtdi-working { background-color: #28a745; } /* [cite: 22] */
-        .bg-jtdi-maint { background-color: #e67e22; } /* [cite: 23] */
-        .bg-jtdi-faulty { background-color: #c0392b; } /* [cite: 24] */
+        .navbar { background: linear-gradient(90deg, #1a2a6c 0%, #203a43 100%); border-bottom: 4px solid var(--jtdi-gold); }
+        .card-stats { border: none; border-radius: 15px; color: white; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .bg-jtdi-main { background-color: var(--jtdi-navy); }
+        .bg-jtdi-working { background-color: #28a745; }
+        .bg-jtdi-maint { background-color: #e67e22; }
+        .bg-jtdi-faulty { background-color: #c0392b; }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-dark mb-4 p-3 shadow">
-        <div class="container d-flex justify-content-between">
-            <a class="navbar-brand fw-bold" href="/">
-                <span style="color: var(--jtdi-gold);">JTDI</span> ASSET TRACKER </a>
+        <div class="container d-flex justify-content-between align-items-center">
+            <a class="navbar-brand fw-bold" href="/"><span style="color: var(--jtdi-gold);">JTDI</span> ASSET TRACKER</a>
             <div class="text-white small">
-                User: <span class="badge bg-light text-dark">{{ session.full_name }}</span> <a href="/logout" class="btn btn-outline-warning btn-sm ms-3">Sign Out</a> </div>
+                User: <span class="badge bg-light text-dark">{{ session.full_name }}</span>
+                <a href="/logout" class="btn btn-outline-warning btn-sm ms-3">Sign Out</a>
+            </div>
         </div>
     </nav>
 
     <div class="container">
-        <div class="row g-4 mb-5 text-center">
-            <div class="col-md-3">
-                <div class="card card-stats p-4 bg-jtdi-main">
-                    <h6 class="text-uppercase small opacity-75">Total Inventory</h6>
-                    <h2 class="display-6 fw-bold">{{ total }}</h2> </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card card-stats p-4 bg-jtdi-working">
-                    <h6 class="text-uppercase small opacity-75">Operational</h6>
-                    <h2 class="display-6 fw-bold">{{ working }}</h2> </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card card-stats p-4 bg-jtdi-maint">
-                    <h6 class="text-uppercase small opacity-75">Under Maintenance</h6>
-                    <h2 class="display-6 fw-bold">{{ maint }}</h2> </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card card-stats p-4 bg-jtdi-faulty">
-                    <h6 class="text-uppercase small opacity-75">Faulty/Down</h6>
-                    <h2 class="display-6 fw-bold">{{ faulty }}</h2> </div>
-            </div>
+        <div class="row g-4 mb-4 text-center">
+            <div class="col-md-3"><div class="card card-stats p-4 bg-jtdi-main"><h6>Total Inventory</h6><h2>{{ total }}</h2></div></div>
+            <div class="col-md-3"><div class="card card-stats p-4 bg-jtdi-working"><h6>Operational</h6><h2>{{ working }}</h2></div></div>
+            <div class="col-md-3"><div class="card card-stats p-4 bg-jtdi-maint"><h6>Maintenance</h6><h2>{{ maint }}</h2></div></div>
+            <div class="col-md-3"><div class="card card-stats p-4 bg-jtdi-faulty"><h6>Faulty/Down</h6><h2>{{ faulty }}</h2></div></div>
         </div>
 
         <div class="card p-4 mb-4 shadow-sm border-0 rounded-4">
             <form method="GET" action="/" class="row g-3 align-items-end">
-                <div class="col-md-5">
-                    <label class="form-label fw-bold text-muted">Search Asset</label>
-                    <input type="text" name="search" class="form-control form-control-lg" value="{{ s_query }}"> </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold text-muted">Category</label>
-                    <select name="category" class="form-select form-select-lg">
+                <div class="col-md-5"><label class="small fw-bold text-muted">Search Asset</label><input type="text" name="search" class="form-control" value="{{ s_query }}"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">Category</label>
+                    <select name="category" class="form-select">
                         <option value="">All Equipment</option>
                         <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC / Desktop</option>
-                        <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option> </select>
+                        <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option>
+                        <option value="Monitor" {{ 'selected' if c_filter == 'Monitor' }}>Monitor</option>
+                        <option value="Printer" {{ 'selected' if c_filter == 'Printer' }}>Printer</option>
+                    </select>
                 </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm">Filter Results</button>
-                </div>
+                <div class="col-md-3"><button type="submit" class="btn btn-primary w-100 fw-bold">Filter Results</button></div>
             </form>
         </div>
 
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="fw-bold" style="color: var(--jtdi-navy);">Inventory Overview</h4> <div class="btn-group">
+            <h4 class="fw-bold" style="color: var(--jtdi-navy);">Inventory Overview</h4>
+            <div class="btn-group">
                 {% if session.role == 'Admin' %}
                     <a href="/admin/users" class="btn btn-warning fw-bold">USERS</a>
                     <a href="/admin/logs" class="btn btn-info text-white fw-bold">LOGS</a>
                 {% endif %}
-                <a href="/add" class="btn btn-success btn-lg px-5 fw-bold shadow">+ New Entry</a> </div>
+                <a href="/add" class="btn btn-success fw-bold">+ NEW ENTRY</a>
+            </div>
         </div>
 
         <div class="bg-white rounded shadow-sm overflow-hidden border">
             <table class="table table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th class="ps-4">Tracking Number</th> <th>Model Details</th>
-                        <th>Status</th>
-                        <th class="text-center pe-4">Manage</th>
-                    </tr>
+                <thead class="table-dark">
+                    <tr><th class="ps-4">Tracking Number</th><th>Model Details</th><th>Status</th><th class="text-center">Manage</th></tr>
                 </thead>
                 <tbody>
                     {% for row in data %}
                     <tr>
-                        <td class="ps-4 fw-bold text-primary">{{ row.tracking_number }}</td> <td>{{ row.cpu_name }}<br><small class="text-muted">SN: {{ row.serial_number }}</small></td>
+                        <td class="ps-4 fw-bold text-primary">{{ row.tracking_number }}</td>
+                        <td>{{ row.cpu_name }}<br><small class="text-muted">SN: {{ row.serial_number }}</small></td>
                         <td>
-                            {% if row.status == 'Working' %}
-                                <span class="text-success fw-bold">● Working</span> {% elif row.status == 'Maintenance' %}
-                                <span class="text-warning fw-bold">● Maintenance</span> {% else %}
-                                <span class="text-danger fw-bold">● Faulty</span> {% endif %}
+                            <span class="badge {{ 'bg-success' if row.status == 'Working' else 'bg-warning' if row.status == 'Maintenance' else 'bg-danger' }}">
+                                {{ row.status }}
+                            </span>
                         </td>
                         <td class="text-center pe-4">
                             <div class="btn-group">
-                                <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-dark">Edit</a> <form action="/delete/{{ row.id }}" method="POST" class="d-inline" onsubmit="return confirm('Delete?');">
-                                    <button class="btn btn-sm btn-outline-danger">Del</button> </form>
+                                <a href="/view/{{ row.id }}" class="btn btn-sm btn-outline-primary">View</a>
+                                <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-dark">Edit</a>
+                                <a href="/qr/{{ row.id }}" class="btn btn-sm btn-dark">QR</a>
+                                <form action="/delete/{{ row.id }}" method="POST" class="d-inline" onsubmit="return confirm('Delete?');">
+                                    <button class="btn btn-sm btn-outline-danger">Del</button>
+                                </form>
                             </div>
                         </td>
                     </tr>
