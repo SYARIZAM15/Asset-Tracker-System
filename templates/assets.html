@@ -1,4 +1,4 @@
-<assets html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,12 +8,11 @@
         :root { --jtdi-navy: #1a2a6c; --jtdi-gold: #ffc107; }
         body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
         .navbar { background: linear-gradient(90deg, #1a2a6c 0%, #203a43 100%); border-bottom: 4px solid var(--jtdi-gold); }
-        .card-stats { border: none; border-radius: 15px; color: white; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .bg-jtdi-main { background-color: var(--jtdi-navy); }
+        .card-stats { border: none; border-radius: 15px; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark mb-4 p-3">
+    <nav class="navbar navbar-dark mb-4 p-3 shadow">
         <div class="container d-flex justify-content-between">
             <a class="navbar-brand fw-bold" href="/"><span style="color: var(--jtdi-gold);">JTDI</span> ASSET TRACKER</a>
             <div class="text-white small">
@@ -25,9 +24,9 @@
 
     <div class="container">
         <div class="row g-3 mb-4 text-center">
-            <div class="col-md-3"><div class="card card-stats p-3 bg-jtdi-main"><small>Total Inventory</small><h2>{{ total }}</h2></div></div>
+            <div class="col-md-3"><div class="card card-stats p-3" style="background:#1a2a6c"><small>Total Inventory</small><h2>{{ total }}</h2></div></div>
             <div class="col-md-3"><div class="card card-stats p-3 bg-success"><small>Operational</small><h2>{{ working }}</h2></div></div>
-            <div class="col-md-3"><div class="card card-stats p-3 bg-warning text-dark"><small>Maintenance</small><h2>{{ maint }}</h2></div></div>
+            <div class="col-md-3"><div class="card card-stats p-3 bg-warning text-dark"><small>Under Maintenance</small><h2>{{ maint }}</h2></div></div>
             <div class="col-md-3"><div class="card card-stats p-3 bg-danger"><small>Faulty/Down</small><h2>{{ faulty }}</h2></div></div>
         </div>
 
@@ -35,26 +34,24 @@
             <form method="GET" action="/" class="row g-2 align-items-end">
                 <div class="col-md-5">
                     <label class="small fw-bold">Search Asset</label>
-                    <input type="text" name="search" class="form-control" placeholder="Model or S/N..." value="{{ s_query }}">
+                    <input type="text" name="search" class="form-control" placeholder="S/N or Model..." value="{{ s_query }}">
                 </div>
                 <div class="col-md-4">
                     <label class="small fw-bold">Equipment Category</label>
                     <select name="category" class="form-select">
                         <option value="">All Categories</option>
-                        <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC / Desktop</option>
-                        <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option>
-                        <option value="Monitor" {{ 'selected' if c_filter == 'Monitor' }}>Monitor</option>
+                        <option value="PC">PC / Desktop</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Monitor">Monitor</option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-dark w-100">Filter Results</button>
-                </div>
+                <div class="col-md-3"><button type="submit" class="btn btn-dark w-100">Filter Results</button></div>
             </form>
         </div>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-bold">Inventory Overview</h5>
-            <div class="btn-group">
+            <div class="btn-group shadow">
                 {% if session.role == 'Admin' %}<a href="/admin/users" class="btn btn-warning fw-bold">⚙️ MANAGE USERS</a>{% endif %}
                 <a href="/add" class="btn btn-success fw-bold">+ NEW ENTRY</a>
             </div>
@@ -63,25 +60,20 @@
         <div class="table-responsive bg-white rounded shadow-sm">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-dark">
-                    <tr>
-                        <th class="ps-3">Tracking No</th>
-                        <th>Model Details</th>
-                        <th>Status</th>
-                        <th class="text-center">Actions</th>
-                    </tr>
+                    <tr><th>Tracking No</th><th>Details</th><th>Status</th><th class="text-center">Actions</th></tr>
                 </thead>
                 <tbody>
                     {% for row in data %}
                     <tr>
-                        <td class="ps-3 fw-bold text-primary">{{ row.tracking_number }}</td>
+                        <td class="fw-bold text-primary ps-3">{{ row.tracking_number }}</td>
                         <td>{{ row.cpu_name }}<br><small class="text-muted">SN: {{ row.serial_number }}</small></td>
                         <td><span class="badge {{ 'bg-success' if row.status == 'Working' else 'bg-warning' if row.status == 'Maintenance' else 'bg-danger' }}">{{ row.status }}</span></td>
-                        <td class="text-center">
+                        <td class="text-center pe-3">
                             <div class="btn-group">
                                 <a href="/view/{{ row.id }}" class="btn btn-sm btn-outline-primary">View</a>
                                 <a href="/edit/{{ row.id }}" class="btn btn-sm btn-outline-dark">Edit</a>
                                 <a href="/qr/{{ row.id }}" class="btn btn-sm btn-info text-white">QR</a>
-                                <form action="/delete/{{ row.id }}" method="POST" class="d-inline" onsubmit="return confirm('Delete permanently?');">
+                                <form action="/delete/{{ row.id }}" method="POST" onsubmit="return confirm('Delete?');">
                                     <button type="submit" class="btn btn-sm btn-danger">Del</button>
                                 </form>
                             </div>
