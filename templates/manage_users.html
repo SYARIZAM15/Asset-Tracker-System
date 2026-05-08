@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<manage_users html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,6 @@
         :root { --jtdi-navy: #1a2a6c; --jtdi-gold: #ffc107; }
         body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
         .header { background: var(--jtdi-navy); color: white; padding: 20px; border-bottom: 4px solid var(--jtdi-gold); }
-        .card { border: none; border-radius: 12px; }
     </style>
 </head>
 <body>
@@ -21,18 +20,18 @@
 
     <div class="container">
         {% with messages = get_flashed_messages() %}{% if messages %}{% for m in messages %}
-            <div class="alert alert-info alert-dismissible fade show border-0 shadow-sm">{{ m }}</div>
+            <div class="alert alert-info alert-dismissible fade show shadow-sm border-0">{{ m }}</div>
         {% endfor %}{% endif %}{% endwith %}
 
         <div class="row g-4">
             <div class="col-lg-4">
-                <div class="card shadow p-4">
+                <div class="card shadow border-0 p-4 rounded-4">
                     <h5 class="fw-bold mb-3 text-primary">Register New Staff</h5>
                     <form method="POST">
                         <div class="mb-2"><label class="small fw-bold">Full Name</label><input type="text" name="full_name" class="form-control" required></div>
                         <div class="mb-2"><label class="small fw-bold">Username</label><input type="text" name="username" class="form-control" required></div>
                         <div class="mb-2"><label class="small fw-bold">Email</label><input type="email" name="email" class="form-control" required></div>
-                        <div class="mb-2"><label class="small fw-bold">Temporary Password</label><input type="password" name="password" class="form-control" required></div>
+                        <div class="mb-2"><label class="small fw-bold">Temp Password</label><input type="password" name="password" class="form-control" required></div>
                         <div class="mb-3"><label class="small fw-bold">Role</label>
                             <select name="role" class="form-select">
                                 <option value="User">User (Staff)</option>
@@ -45,12 +44,12 @@
             </div>
 
             <div class="col-lg-8">
-                <div class="card shadow p-4">
+                <div class="card shadow border-0 p-4 rounded-4">
                     <h5 class="fw-bold mb-3 text-primary">Active System Accounts</h5>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
-                                <tr><th>Name</th><th>Email</th><th>Role</th><th class="text-end">Action</th></tr>
+                                <tr><th>Name / Username</th><th>Email</th><th>Role</th><th class="text-end">Action</th></tr>
                             </thead>
                             <tbody>
                                 {% for u in users %}
@@ -66,7 +65,7 @@
                                         <form action="/admin/delete_user/{{ u.id }}" method="POST" onsubmit="return confirm('Delete user?');">
                                             <button type="submit" class="btn btn-sm btn-outline-danger px-3">Delete</button>
                                         </form>
-                                        {% else %}<small class="text-muted">Current</small>{% endif %}
+                                        {% else %}<small class="text-muted italic">Current User</small>{% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
