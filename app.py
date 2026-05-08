@@ -12,22 +12,19 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
-# --- DATABASE REPAIR & INIT (Fixes Log Error) ---
+# --- DATABASE INITIALIZATION ---
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
-    # Ensure Asset Table
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT, 
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, status TEXT);''')
-    # Ensure User Table
     cur.execute('''CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, 
         email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
-    # Ensure Login Logs Table (The fix for your error)
     cur.execute('''CREATE TABLE IF NOT EXISTS login_logs (
         id SERIAL PRIMARY KEY, full_name TEXT, email TEXT, login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
     
-    # Create Default Admin if empty
+    # Create Default Admin
     cur.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cur.fetchone():
         hashed_pw = generate_password_hash('admin123')
@@ -96,7 +93,7 @@ def delete_asset(id):
     conn = get_db_connection(); cur = conn.cursor(); cur.execute("DELETE FROM assets WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close()
     return redirect(url_for('index'))
 
-# --- 4. LOGS (FIXED ROUTE) ---
+# --- 4. USER LOGS ---
 @app.route('/admin/logs')
 def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -105,18 +102,34 @@ def view_logs():
     logs = cur.fetchall(); cur.close(); conn.close()
     return render_template('login_logs.html', logs=logs)
 
-# --- 5. MANAGEMENT USER ---
+# --- 5. MANAGEMENT USER (FIXED) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
-        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
+        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", 
+                    (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
         conn.commit()
-    cur.execute("SELECT * FROM users ORDER BY id ASC"); users = cur.fetchall(); cur.close(); conn.close()
+    # Always fetch users to display the list
+    cur.execute("SELECT id, full_name, username, email, role FROM users ORDER BY id ASC")
+    users = cur.fetchall(); cur.close(); conn.close()
     return render_template('manage_users.html', users=users)
 
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+def delete_user(user_id):
+    if session.get('role') == 'Admin':
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+        target = cur.fetchone()
+        if target and target[0] != session.get('user'):
+            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            conn.commit()
+        cur.close(); conn.close()
+    return redirect(url_for('manage_users'))
+
+# --- AUTH ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -127,7 +140,6 @@ def login():
         user = cur.fetchone()
         if user and check_password_hash(user['password'], password):
             session.update({'user': user['username'], 'role': user['role'], 'full_name': user['full_name']})
-            # LOG THE LOGIN
             cur.execute("INSERT INTO login_logs (full_name, email) VALUES (%s, %s)", (user['full_name'], user['email']))
             conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     return render_template('login.html')
