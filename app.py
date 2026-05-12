@@ -12,7 +12,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
-# --- DATABASE INITIALIZATION ---
+# --- DATABASE INITIALIZATION (Ensures all columns exist) ---
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
@@ -20,7 +20,7 @@ def init_db():
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, 
         status TEXT, is_deleted BOOLEAN DEFAULT FALSE);''')
     
-    # Check if 'is_deleted' exists, if not, add it
+    # Auto-Repair: Add is_deleted if it doesn't exist in an old database
     cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_name='assets' AND column_name='is_deleted';")
     if cur.fetchone()[0] == 0:
         cur.execute("ALTER TABLE assets ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE;")
@@ -36,18 +36,17 @@ def init_db():
 
 init_db()
 
-# --- 1. DASHBOARD & SEARCH (FIXED VISIBILITY) ---
+# --- 1. DASHBOARD & SEARCH (Visibility Logic) ---
 @app.route('/')
 def index():
     if 'user' not in session: return redirect(url_for('login'))
     s, c = request.args.get('search', '').strip(), request.args.get('category', '').strip()
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
-    # BASE QUERY
+    # Logic: Admin sees ALL. Regular User sees only NOT deleted.
     query = "SELECT * FROM assets WHERE 1=1"
     params = []
     
-    # CRITICAL FIX: If NOT Admin, hide deleted. If Admin, show ALL.
     if session.get('role') != 'Admin':
         query += " AND is_deleted = FALSE"
     
@@ -60,7 +59,7 @@ def index():
     cur.execute(query + " ORDER BY id DESC", tuple(params))
     data = cur.fetchall()
     
-    # Dashboard Stats
+    # Stats calculation based on what the current user is allowed to see
     stats = {
         'total': len(data),
         'working': len([r for r in data if r['status'] == 'Working']),
@@ -70,7 +69,7 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. NEW ENTRY ---
+# --- 2. NEW ENTRY (Fixed INSERT query) ---
 @app.route('/add', methods=['GET', 'POST'])
 def add():
     if 'user' not in session: return redirect(url_for('login'))
@@ -78,26 +77,31 @@ def add():
         conn = get_db_connection(); cur = conn.cursor()
         cur.execute("SELECT COUNT(*) FROM assets"); count = cur.fetchone()[0]
         t = f"JTDI/SDK/2026/{count + 1:04d}"
-        cur.execute("""INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) 
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)""", 
-                    (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), 
-                     request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
-        conn.commit(); cur.close(); conn.close()
+        try:
+            cur.execute("""INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) 
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)""", 
+                        (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), 
+                         request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
+            conn.commit()
+            flash("New Entry Added Successfully!")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Error adding entry: {e}")
+        cur.close(); conn.close()
         return redirect(url_for('index'))
     return render_template('add.html')
 
-# --- 3. SOFT DELETE ---
+# --- 3. SOFT DELETE (Admin Visibility) ---
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor()
-    # Mark as deleted instead of removing from DB
     cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,))
     conn.commit(); cur.close(); conn.close()
-    flash("Asset removed (remains visible to Admin).")
+    flash("Asset removed from user list (Visible to Admin).")
     return redirect(url_for('index'))
 
-# --- 4. EDIT, VIEW, QR ---
+# --- 4. VIEW, EDIT, QR ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
     if 'user' not in session: return redirect(url_for('login'))
@@ -148,7 +152,7 @@ def view_logs():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email').strip().lower()
+        email = request.form.get('email', '').strip().lower()
         conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cur.fetchone()
