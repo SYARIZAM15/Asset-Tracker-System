@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>JTDI Asset Tracker</title>
+    <title>JTDI Inventory Dashboard</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
         :root { --navy: #1a2a6c; --gold: #ffc107; --light: #f8f9fa; }
         body { background-color: var(--light); font-family: 'Segoe UI', sans-serif; }
         .navbar { background: linear-gradient(90deg, #1a2a6c 0%, #203a43 100%); border-bottom: 4px solid var(--gold); }
-        .stat-card { border: none; border-radius: 15px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .row-deleted { background-color: #ffe8e8 !important; border-left: 5px solid #dc3545; opacity: 0.85; }
+        .stat-card { border: none; border-radius: 12px; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .row-deleted { background-color: #ffe8e8 !important; border-left: 5px solid #dc3545; }
         .table-container { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
     </style>
 </head>
@@ -37,7 +37,7 @@
             <form method="GET" action="/" class="row g-3 align-items-end">
                 <div class="col-md-5">
                     <label class="form-label small fw-bold">Search Assets</label>
-                    <input type="text" name="search" class="form-control" placeholder="S/N or ID..." value="{{ s_query }}">
+                    <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ s_query }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small fw-bold">Category</label>
@@ -48,7 +48,7 @@
                         <option value="Monitor" {{ 'selected' if c_filter == 'Monitor' }}>Monitor</option>
                     </select>
                 </div>
-                <div class="col-md-3"><button type="submit" class="btn btn-primary w-100 fw-bold">FILTER</button></div>
+                <div class="col-md-3"><button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm">FILTER RESULTS</button></div>
             </form>
         </div>
 
@@ -67,14 +67,14 @@
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead>
-                        <tr><th>ID</th><th>Model Details</th><th>Status</th><th class="text-center">Manage</th></tr>
+                        <tr><th class="ps-4">ID</th><th>Details</th><th>Status</th><th class="text-center">Manage</th></tr>
                     </thead>
                     <tbody>
                         {% for row in data %}
                         <tr class="{{ 'row-deleted' if row.is_deleted else '' }}">
                             <td class="ps-4 fw-bold text-primary">
                                 {{ row.tracking_number }}
-                                {% if row.is_deleted %}<br><span class="badge bg-danger">DELETED (VISIBLE TO ADMIN)</span>{% endif %}
+                                {% if row.is_deleted %}<br><span class="badge bg-danger">DELETED</span>{% endif %}
                             </td>
                             <td><b>{{ row.cpu_name }}</b><br><small class="text-muted">S/N: {{ row.serial_number }}</small></td>
                             <td><span class="badge {{ 'bg-success' if row.status == 'Working' else 'bg-warning' if row.status == 'Maintenance' else 'bg-danger' }}">{{ row.status }}</span></td>
