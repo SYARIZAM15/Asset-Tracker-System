@@ -12,16 +12,15 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
-# --- DATABASE INITIALIZATION (Includes Soft-Delete Fix) ---
+# --- DATABASE INITIALIZATION ---
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
-    # Ensure Assets Table with 'is_deleted' column
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT, 
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, 
         status TEXT, is_deleted BOOLEAN DEFAULT FALSE);''')
     
-    # Check if 'is_deleted' column exists (for existing databases)
+    # Check if 'is_deleted' exists, if not, add it
     cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_name='assets' AND column_name='is_deleted';")
     if cur.fetchone()[0] == 0:
         cur.execute("ALTER TABLE assets ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE;")
@@ -37,17 +36,18 @@ def init_db():
 
 init_db()
 
-# --- 1. DASHBOARD & SEARCH (Includes Admin View for Deleted) ---
+# --- 1. DASHBOARD & SEARCH (FIXED VISIBILITY) ---
 @app.route('/')
 def index():
     if 'user' not in session: return redirect(url_for('login'))
     s, c = request.args.get('search', '').strip(), request.args.get('category', '').strip()
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
-    # Logic: Admin sees everything. User sees only is_deleted=FALSE
+    # BASE QUERY
     query = "SELECT * FROM assets WHERE 1=1"
     params = []
     
+    # CRITICAL FIX: If NOT Admin, hide deleted. If Admin, show ALL.
     if session.get('role') != 'Admin':
         query += " AND is_deleted = FALSE"
     
@@ -86,15 +86,15 @@ def add():
         return redirect(url_for('index'))
     return render_template('add.html')
 
-# --- 3. SOFT DELETE (Admin still sees it) ---
+# --- 3. SOFT DELETE ---
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor()
-    # We change from DELETE to UPDATE is_deleted = TRUE
+    # Mark as deleted instead of removing from DB
     cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,))
     conn.commit(); cur.close(); conn.close()
-    flash("Asset removed from main list (Admin can still view).")
+    flash("Asset removed (remains visible to Admin).")
     return redirect(url_for('index'))
 
 # --- 4. EDIT, VIEW, QR ---
@@ -103,7 +103,11 @@ def edit(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
-        cur.execute("UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s WHERE id=%s", (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
+        cur.execute("""UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, 
+                       ram_size=%s, storage_type=%s, location=%s, status=%s WHERE id=%s""", 
+                    (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), 
+                     request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), 
+                     request.form.get('status'), id))
         conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
@@ -121,7 +125,7 @@ def qr_code(id):
     img = qrcode.make(qr_url); buf = io.BytesIO(); img.save(buf); qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
     return render_template('qr_display.html', qr_code=qr_b64)
 
-# --- 5. MANAGEMENT USER ---
+# --- 5. MANAGEMENT USER & LOGS ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -133,7 +137,6 @@ def manage_users():
     cur.execute("SELECT * FROM users ORDER BY id ASC"); users = cur.fetchall(); cur.close(); conn.close()
     return render_template('manage_users.html', users=users)
 
-# --- 6. LOGS ---
 @app.route('/admin/logs')
 def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
