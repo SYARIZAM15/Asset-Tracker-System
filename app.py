@@ -31,7 +31,7 @@ def init_db():
 
 init_db()
 
-# --- 1. DASHBOARD & SEARCH (Main Inventory) ---
+# --- 1. DASHBOARD & SEARCH ---
 @app.route('/')
 def index():
     if 'user' not in session: return redirect(url_for('login'))
@@ -51,7 +51,7 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. USER MANAGEMENT (FIXED: ERROR ON CLICK) ---
+# --- 2. USER MANAGEMENT (FIXED ERROR) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -63,30 +63,28 @@ def manage_users():
             cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", 
                         (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
             conn.commit()
-            flash("User Registered Successfully.")
+            flash("User Registered.")
         except:
             conn.rollback()
-            flash("Error: Username or Email already exists.")
-    
-    # We query the users and pass them to the template as 'users'
+            flash("Error: Duplicate User/Email.")
+
+    # FETCH USERS AND PASS AS 'users' VARIABLE
     cur.execute("SELECT * FROM users ORDER BY id ASC")
     all_users = cur.fetchall()
     cur.close(); conn.close()
-    
-    # Ensure the variable name 'users' matches what your HTML template uses in the loop
     return render_template('manage_users.html', users=all_users)
 
-# --- 3. VIEW ASSET (PUBLIC ACCESSIBLE FOR QR) ---
+# --- 3. VIEW ASSET (PUBLIC FOR QR CODE) ---
 @app.route('/view/<int:id>')
 def view_asset(id):
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone()
-    if not asset: return "Asset Not Found", 404
+    if not asset: return "Not Found", 404
     cur.execute("SELECT * FROM maintenance_logs WHERE asset_id = %s ORDER BY log_date DESC", (id,))
     logs = cur.fetchall(); cur.close(); conn.close()
     return render_template('view.html', asset=asset, logs=logs)
 
-# --- 4. NEW ENTRY ---
+# --- 4. CRUD & QR ---
 @app.route('/add', methods=['GET', 'POST'])
 def add_asset():
     if 'user' not in session: return redirect(url_for('login'))
@@ -94,40 +92,19 @@ def add_asset():
         conn = get_db_connection(); cur = conn.cursor()
         t = f"JTDI-{datetime.now().strftime('%y%m%H%M%S')}"
         cur.execute("INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)", (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
-        conn.commit(); cur.close(); conn.close()
-        return redirect(url_for('index'))
+        conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     return render_template('add.html')
 
-# --- 5. EDIT, DELETE & LOGS ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
-        cur.execute("""UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, 
-                       storage_type=%s, location=%s, status=%s WHERE id=%s""", 
-                    (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), 
-                     request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
-        comment = request.form.get('comment', '').strip()
-        if comment:
-            cur.execute("INSERT INTO maintenance_logs (asset_id, action_type, comment, updated_by) VALUES (%s, %s, %s, %s)", (id, request.form.get('action_type'), comment, session.get('full_name')))
-        conn.commit(); cur.close(); conn.close()
-        return redirect(url_for('index'))
+        cur.execute("UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s WHERE id=%s", (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
+        conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
 
-@app.route('/delete/<int:id>', methods=['POST'])
-def delete_asset(id):
-    if 'user' not in session: return redirect(url_for('login'))
-    conn = get_db_connection(); cur = conn.cursor(); cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close()
-    return redirect(url_for('index'))
-
-@app.route('/admin/logs')
-def view_logs():
-    if session.get('role') != 'Admin': return redirect(url_for('index'))
-    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cur.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 500"); logs = cur.fetchall(); cur.close(); conn.close(); return render_template('login_logs.html', logs=logs)
-
-# --- 6. QR CODE & EXCEL ---
 @app.route('/qr/<int:id>')
 def qr_code(id):
     if 'user' not in session: return redirect(url_for('login'))
@@ -135,18 +112,11 @@ def qr_code(id):
     img = qrcode.make(qr_url); buf = io.BytesIO(); img.save(buf); qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
     return render_template('qr_display.html', qr_code=qr_b64)
 
-@app.route('/export/excel')
-def export_excel():
+@app.route('/delete/<int:id>', methods=['POST'])
+def delete_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
-    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute("SELECT tracking_number, asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets WHERE is_deleted = FALSE")
-    df = pd.DataFrame(cur.fetchall(), columns=['Tracking ID', 'Category', 'Model', 'Serial', 'RAM', 'Storage', 'Location', 'Status'])
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
-    output.seek(0)
-    return send_file(output, download_name="Inventory.xlsx", as_attachment=True)
+    conn = get_db_connection(); cur = conn.cursor(); cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
 
-# --- AUTH ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -155,7 +125,7 @@ def login():
         conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cur.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cur.fetchone()
         if user and check_password_hash(user['password'], request.form.get('password')):
-            session.update({'user': user['username'], 'role': user['role'], 'full_name': user['full_name']}); cur.execute("INSERT INTO login_logs (full_name, email) VALUES (%s, %s)", (user['full_name'], user['email'])); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
+            session.update({'user': user['username'], 'role': user['role'], 'full_name': user['full_name']}); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     return render_template('login.html')
 
 @app.route('/logout')
