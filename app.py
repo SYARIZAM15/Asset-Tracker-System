@@ -44,7 +44,6 @@ def index():
     
     query = "SELECT * FROM assets WHERE 1=1"
     params = []
-    # Admin sees everything; User sees only active
     if session.get('role') != 'Admin': query += " AND is_deleted = FALSE"
     
     if s:
@@ -65,14 +64,14 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. EDIT (FIXED: Full Sync with View) ---
+# --- 2. EDIT (FIXED: Full Database Sync) ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
     if request.method == 'POST':
-        # Every field must be updated here for the View to reflect changes
+        # UPDATE EVERY SINGLE FIELD
         cur.execute("""UPDATE assets SET 
             asset_type=%s, tracking_number=%s, cpu_name=%s, 
             ram_size=%s, storage_type=%s, location=%s, status=%s 
@@ -82,14 +81,14 @@ def edit(id):
              request.form.get('storage_type'), request.form.get('location'), 
              request.form.get('status'), id))
         conn.commit(); cur.close(); conn.close()
-        flash("Asset updated successfully!")
+        flash("Update successful!")
         return redirect(url_for('index'))
     
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,))
     asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
 
-# --- 3. MANAGEMENT USER (FIXED: Passes 'users' list to template) ---
+# --- 3. MANAGEMENT USER (FIXED: Route Variable Sync) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -97,20 +96,17 @@ def manage_users():
     
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
-        cur.execute("""INSERT INTO users (full_name, username, email, password, role) 
-                       VALUES (%s,%s,%s,%s,%s)""", 
-                    (request.form.get('full_name'), request.form.get('username'), 
-                     request.form.get('email'), pw, request.form.get('role')))
+        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)",
+                    (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
         conn.commit()
-        flash("Staff member added successfully.")
-
-    # Fetch users to prevent "users undefined" error in template
+    
     cur.execute("SELECT id, full_name, username, email, role FROM users ORDER BY id ASC")
-    users = cur.fetchall()
+    # THE VARIABLE BELOW MUST MATCH YOUR TEMPLATE LOOP
+    users_list = cur.fetchall() 
     cur.close(); conn.close()
-    return render_template('manage_users.html', users=users)
+    return render_template('manage_users.html', users=users_list)
 
-# --- 4. LOGS (Restored) ---
+# --- 4. SYSTEM LOGS ---
 @app.route('/admin/logs')
 def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -119,7 +115,7 @@ def view_logs():
     logs = cur.fetchall(); cur.close(); conn.close()
     return render_template('login_logs.html', logs=logs)
 
-# --- 5. OTHERS (View, QR, Delete, Add, Auth) ---
+# --- 5. ASSET ACTIONS (View, QR, Delete, Add) ---
 @app.route('/view/<int:id>')
 def view_asset(id):
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -149,10 +145,7 @@ def add():
         conn = get_db_connection(); cur = conn.cursor()
         cur.execute("SELECT COUNT(*) FROM assets"); count = cur.fetchone()[0]
         t = f"JTDI/SDK/2026/{count + 1:04d}"
-        cur.execute("""INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) 
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)""", 
-                    (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), 
-                     request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
+        cur.execute("INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)", (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('index'))
     return render_template('add.html')
