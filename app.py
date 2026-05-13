@@ -44,6 +44,7 @@ def index():
     
     query = "SELECT * FROM assets WHERE 1=1"
     params = []
+    # Admin sees everything; User sees only active
     if session.get('role') != 'Admin': query += " AND is_deleted = FALSE"
     
     if s:
@@ -64,13 +65,14 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. EDIT (FIXED: Update SQL Query) ---
+# --- 2. EDIT (FIXED: Full Sync with View) ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
     if request.method == 'POST':
+        # Every field must be updated here for the View to reflect changes
         cur.execute("""UPDATE assets SET 
             asset_type=%s, tracking_number=%s, cpu_name=%s, 
             ram_size=%s, storage_type=%s, location=%s, status=%s 
@@ -80,13 +82,14 @@ def edit(id):
              request.form.get('storage_type'), request.form.get('location'), 
              request.form.get('status'), id))
         conn.commit(); cur.close(); conn.close()
+        flash("Asset updated successfully!")
         return redirect(url_for('index'))
     
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,))
     asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
 
-# --- 3. MANAGEMENT USER (FIXED: Added users list) ---
+# --- 3. MANAGEMENT USER (FIXED: Passes 'users' list to template) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -94,15 +97,20 @@ def manage_users():
     
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
-        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)",
-                    (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
+        cur.execute("""INSERT INTO users (full_name, username, email, password, role) 
+                       VALUES (%s,%s,%s,%s,%s)""", 
+                    (request.form.get('full_name'), request.form.get('username'), 
+                     request.form.get('email'), pw, request.form.get('role')))
         conn.commit()
+        flash("Staff member added successfully.")
 
+    # Fetch users to prevent "users undefined" error in template
     cur.execute("SELECT id, full_name, username, email, role FROM users ORDER BY id ASC")
-    users = cur.fetchall(); cur.close(); conn.close()
+    users = cur.fetchall()
+    cur.close(); conn.close()
     return render_template('manage_users.html', users=users)
 
-# --- 4. LOGS (RESTORED) ---
+# --- 4. LOGS (Restored) ---
 @app.route('/admin/logs')
 def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -141,7 +149,10 @@ def add():
         conn = get_db_connection(); cur = conn.cursor()
         cur.execute("SELECT COUNT(*) FROM assets"); count = cur.fetchone()[0]
         t = f"JTDI/SDK/2026/{count + 1:04d}"
-        cur.execute("INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)", (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
+        cur.execute("""INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) 
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)""", 
+                    (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), 
+                     request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('index'))
     return render_template('add.html')
