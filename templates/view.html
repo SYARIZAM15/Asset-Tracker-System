@@ -1,22 +1,61 @@
 <!DOCTYPE html>
 <html>
-<head><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></head>
-<body class="bg-light p-5">
-    <div class="container" style="max-width: 600px;">
-        <div class="card shadow border-0 overflow-hidden">
-            <div class="card-header bg-primary text-white fw-bold">🔍 ASSET SPECIFICATIONS</div>
-            <div class="card-body">
-                <table class="table table-sm">
-                    <tr><th>Tracking:</th><td>{{ asset.tracking_number }}</td></tr>
-                    <tr><th>Category:</th><td>{{ asset.asset_type }}</td></tr>
-                    <tr><th>Brand/Model:</th><td>{{ asset.cpu_name }}</td></tr>
-                    <tr><th>S/N:</th><td>{{ asset.serial_number }}</td></tr>
-                    <tr><th>RAM:</th><td>{{ asset.ram_size }}</td></tr>
-                    <tr><th>Storage:</th><td>{{ asset.storage_type }}</td></tr>
-                    <tr><th>Location:</th><td>{{ asset.location }}</td></tr>
-                    <tr><th>Status:</th><td><span class="badge bg-info">{{ asset.status }}</span></td></tr>
-                </table>
-                <a href="/" class="btn btn-secondary w-100 mt-3">Back to Dashboard</a>
+<head>
+    <title>View Asset Details</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        :root { --navy: #1a2a6c; --gold: #ffc107; }
+        .navbar { background: var(--navy); border-bottom: 4px solid var(--gold); }
+        .card-detail { border-radius: 15px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .log-entry { border-left: 4px solid var(--navy); background: #f8f9fa; margin-bottom: 10px; padding: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark p-3 mb-4 shadow">
+        <div class="container d-flex justify-content-between">
+            <a class="navbar-brand fw-bold" href="/">JTDI ASSET TRACKER</a>
+            <a href="/" class="btn btn-warning fw-bold btn-sm">Back to Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-md-5">
+                <div class="card card-detail p-4 bg-white">
+                    <h4 class="fw-bold text-primary mb-4">Asset Specifications</h4>
+                    <table class="table table-borderless align-middle">
+                        <tr><td class="fw-bold text-muted">Tracking #</td><td class="fw-bold">{{ asset.tracking_number }}</td></tr>
+                        <tr><td class="fw-bold text-muted">Status</td><td><span class="badge bg-success p-2">{{ asset.status }}</span></td></tr>
+                        <tr><td class="fw-bold text-muted">Brand/Model</td><td>{{ asset.cpu_name }}</td></tr>
+                        <tr><td class="fw-bold text-muted">Serial #</td><td>{{ asset.serial_number }}</td></tr>
+                        <tr><td class="fw-bold text-muted">RAM</td><td>{{ asset.ram_size }}</td></tr>
+                        <tr><td class="fw-bold text-muted">Storage</td><td>{{ asset.storage_type }}</td></tr>
+                        <tr><td class="fw-bold text-muted">Location</td><td>{{ asset.location }}</td></tr>
+                    </table>
+                    <div class="text-center mt-3">
+                        <a href="/qr/{{ asset.id }}" class="btn btn-dark w-100 fw-bold">View QR Code</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-7">
+                <div class="card card-detail p-4 bg-white">
+                    <h4 class="fw-bold text-primary mb-4">Log Maintenance / Problem History</h4>
+                    <div class="history-list" style="max-height: 500px; overflow-y: auto;">
+                        {% for log in logs %}
+                        <div class="log-entry shadow-sm">
+                            <div class="d-flex justify-content-between">
+                                <strong class="text-navy">{{ log.action_type }}</strong>
+                                <small class="text-muted">{{ log.log_date.strftime('%d %b %Y, %H:%M') }}</small>
+                            </div>
+                            <p class="mt-2 mb-1 text-dark">{{ log.comment }}</p>
+                            <small class="text-muted italic">By: {{ log.updated_by }}</small>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center py-5">No maintenance or problem reports found.</p>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
         </div>
     </div>
