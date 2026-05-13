@@ -4,28 +4,25 @@
     <meta charset="UTF-8">
     <title>JTDI Asset Tracker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         :root { --navy: #1a2a6c; --gold: #ffc107; }
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: #f8f9fa; font-family: 'Inter', sans-serif; }
         .navbar { background: var(--navy); border-bottom: 4px solid var(--gold); }
-        .stat-card { border: none; border-radius: 12px; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .stat-card { border: none; border-radius: 12px; color: white; }
         .manage-group { display: inline-flex; border-radius: 8px; overflow: hidden; border: 1px solid #dee2e6; background: white; }
         .manage-group .btn { padding: 0.4rem 0.9rem; font-size: 0.85rem; border: none; border-radius: 0; }
         .btn-view { color: #0d6efd; border-right: 1px solid #dee2e6 !important; }
         .btn-edit { color: #212529; border-right: 1px solid #dee2e6 !important; }
-        .btn-qr { background: #212529 !important; color: white !important; }
-        .btn-del { color: #dc3545; border-left: 1px solid #dee2e6 !important; }
+        .btn-del { color: #dc3545; }
+        /* Style for deleted items (Only seen by Admin) */
+        .row-deleted { background-color: #ffe5e5 !important; color: #a30000; }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-dark p-3 mb-4 shadow-sm">
-        <div class="container d-flex justify-content-between align-items-center">
-            <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">JTDI ASSET TRACKER</a>
-            <div class="text-white small">
-                Welcome, <b>{{ session.full_name }}</b> | 
-                <a href="{{ url_for('logout') }}" class="text-white text-decoration-none">Logout</a>
-            </div>
+        <div class="container d-flex justify-content-between">
+            <a class="navbar-brand fw-bold" href="/">JTDI ASSET TRACKER</a>
+            <div class="text-white small">Welcome, <b>{{ session.full_name }}</b> | <a href="/logout" class="text-white">Logout</a></div>
         </div>
     </nav>
 
@@ -38,53 +35,49 @@
         </div>
 
         <div class="card p-4 mb-4 shadow-sm border-0">
-            <form method="GET" action="{{ url_for('index') }}" class="row g-3 align-items-end">
-                <div class="col-md-5"><input type="text" name="search" class="form-control" placeholder="Search S/N or Model..." value="{{ s_query }}"></div>
-                <div class="col-md-3">
+            <form method="GET" action="/" class="row g-3">
+                <div class="col-md-5"><input type="text" name="search" class="form-control" placeholder="S/N or Model..." value="{{ s_query }}"></div>
+                <div class="col-md-4">
                     <select name="category" class="form-select">
                         <option value="">All Categories</option>
                         <option value="Laptop" {{ 'selected' if c_filter == 'Laptop' }}>Laptop</option>
                         <option value="PC" {{ 'selected' if c_filter == 'PC' }}>PC</option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <div class="btn-group w-100">
-                        <button type="submit" class="btn btn-primary fw-bold">FILTER</button>
-                        <a href="{{ url_for('export_excel') }}" class="btn btn-success fw-bold">EXCEL</a>
-                    </div>
-                </div>
+                <div class="col-md-3"><button type="submit" class="btn btn-primary w-100 fw-bold">FILTER</button></div>
             </form>
         </div>
 
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between mb-3">
             <h5 class="fw-bold mb-0">Inventory Directory</h5>
-            <div class="btn-group shadow-sm">
+            <div class="btn-group">
                 {% if session.role == 'Admin' %}
-                    <a href="{{ url_for('manage_users') }}" class="btn btn-warning btn-sm fw-bold border-end border-dark">USERS</a>
-                    <a href="{{ url_for('view_logs') }}" class="btn btn-info btn-sm text-white fw-bold">LOGS</a>
+                <a href="/admin/users" class="btn btn-warning btn-sm fw-bold">USERS</a>
                 {% endif %}
-                <a href="{{ url_for('add_asset') }}" class="btn btn-success btn-sm fw-bold">+ NEW ENTRY</a>
+                <a href="/add" class="btn btn-success btn-sm fw-bold">+ NEW ENTRY</a>
             </div>
         </div>
 
         <div class="bg-white rounded shadow-sm overflow-hidden border">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
-                    <tr><th class="ps-4">ID</th><th>Details</th><th>Status</th><th class="text-center">Manage</th></tr>
+                    <tr><th class="ps-4">Tracking ID</th><th>Details</th><th>Status</th><th class="text-center">Manage</th></tr>
                 </thead>
                 <tbody>
                     {% for row in data %}
-                    <tr class="{{ 'bg-light text-muted' if row.is_deleted else '' }}">
-                        <td class="ps-4 fw-bold text-primary">{{ row.tracking_number }}</td>
+                    <tr class="{{ 'row-deleted' if row.is_deleted else '' }}">
+                        <td class="ps-4 fw-bold">
+                            {{ row.tracking_number }}
+                            {% if row.is_deleted %}<br><span class="badge bg-danger small">DELETED</span>{% endif %}
+                        </td>
                         <td><b>{{ row.cpu_name }}</b><br><small class="text-muted">S/N: {{ row.serial_number }}</small></td>
                         <td><span class="badge {{ 'bg-success' if row.status == 'Working' else 'bg-warning text-dark' if row.status == 'Maintenance' else 'bg-danger' }}">{{ row.status }}</span></td>
                         <td class="text-center">
                             <div class="manage-group">
-                                <a href="{{ url_for('view_asset', id=row.id) }}" class="btn btn-view">View</a>
-                                <a href="{{ url_for('edit_asset', id=row.id) }}" class="btn btn-edit">Edit</a>
-                                <a href="{{ url_for('qr_code', id=row.id) }}" class="btn btn-qr">QR</a>
+                                <a href="/view/{{ row.id }}" class="btn btn-view">View</a>
+                                <a href="/edit/{{ row.id }}" class="btn btn-edit">Edit</a>
                                 {% if not row.is_deleted %}
-                                <form action="{{ url_for('delete_asset', id=row.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Archive asset?');">
+                                <form action="/delete/{{ row.id }}" method="POST" class="d-inline" onsubmit="return confirm('Archive this asset?');">
                                     <button type="submit" class="btn btn-del">Del</button>
                                 </form>
                                 {% endif %}
