@@ -1,5 +1,5 @@
-import os, io, qrcode, base64, psycopg2, psycopg2.extras
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+import os, io, qrcode, base64, psycopg2, psycopg2.extras, pandas as pd
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 
@@ -15,33 +15,23 @@ def get_db_connection():
 # --- DATABASE INITIALIZATION ---
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
-    # Assets Table
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT, 
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, 
         status TEXT, is_deleted BOOLEAN DEFAULT FALSE);''')
-    
-    # Maintenance Logs Table (THE FIX: This stores the "Problem Reports")
     cur.execute('''CREATE TABLE IF NOT EXISTS maintenance_logs (
         id SERIAL PRIMARY KEY, asset_id INTEGER REFERENCES assets(id), 
         action_type TEXT, comment TEXT, updated_by TEXT, log_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
-    
     cur.execute('''CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, 
         email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
-    
     cur.execute('''CREATE TABLE IF NOT EXISTS login_logs (
         id SERIAL PRIMARY KEY, full_name TEXT, email TEXT, login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
-    
-    # Check for soft delete column
-    cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_name='assets' AND column_name='is_deleted';")
-    if cur.fetchone()[0] == 0: cur.execute("ALTER TABLE assets ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE;")
-    
     conn.commit(); cur.close(); conn.close()
 
 init_db()
 
-# --- 1. DASHBOARD & SEARCH ---
+# --- 1. DASHBOARD & SEARCH (Function 1, 2, 3) ---
 @app.route('/')
 def index():
     if 'user' not in session: return redirect(url_for('login'))
@@ -61,44 +51,57 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. EDIT (FIXED: Saves Problem Reports) ---
+# --- 2. EXPORT TO EXCEL (New Function) ---
+@app.route('/export/excel')
+def export_excel():
+    if 'user' not in session: return redirect(url_for('login'))
+    s, c = request.args.get('search', '').strip(), request.args.get('category', '').strip()
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    query = "SELECT tracking_number, asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets WHERE 1=1"
+    params = []
+    if session.get('role') != 'Admin': query += " AND is_deleted = FALSE"
+    if s:
+        query += " AND (serial_number ILIKE %s OR tracking_number ILIKE %s OR cpu_name ILIKE %s)"
+        params.extend([f'%{s}%', f'%{s}%', f'%{s}%'])
+    if c:
+        query += " AND asset_type = %s"; params.append(c)
+    
+    cur.execute(query, tuple(params))
+    rows = cur.fetchall()
+    
+    # Create DataFrame and Export
+    df = pd.DataFrame(rows, columns=['Tracking ID', 'Category', 'Model/CPU', 'Serial Number', 'RAM', 'Storage', 'Location', 'Status'])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Inventory')
+    output.seek(0)
+    
+    filename = f"JTDI_Inventory_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return send_file(output, attachment_filename=filename, as_attachment=True)
+
+# --- 3. EDIT, VIEW, QR, DELETE (Function 4) ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
-        # Update Asset Info
-        cur.execute("""UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, 
-                       storage_type=%s, location=%s, status=%s WHERE id=%s""", 
-                    (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), 
-                     request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
-        
-        # Save Maintenance Log (Problem Report)
-        action = request.form.get('action_type')
+        cur.execute("""UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s WHERE id=%s""", 
+                    (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
         comment = request.form.get('comment', '').strip()
         if comment:
-            cur.execute("""INSERT INTO maintenance_logs (asset_id, action_type, comment, updated_by) 
-                           VALUES (%s, %s, %s, %s)""", 
-                        (id, action, comment, session.get('full_name')))
-        
-        conn.commit(); cur.close(); conn.close()
-        flash("Asset and Maintenance Log updated!"); return redirect(url_for('index'))
-    
+            cur.execute("INSERT INTO maintenance_logs (asset_id, action_type, comment, updated_by) VALUES (%s, %s, %s, %s)", (id, request.form.get('action_type'), comment, session.get('full_name')))
+        conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
 
-# --- 3. VIEW (FIXED: Shows Problem Reports History) ---
 @app.route('/view/<int:id>')
 def view_asset(id):
-    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone()
-    # Fetch all Maintenance/Problem reports for this asset
-    cur.execute("SELECT * FROM maintenance_logs WHERE asset_id = %s ORDER BY log_date DESC", (id,))
-    logs = cur.fetchall(); cur.close(); conn.close()
+    cur.execute("SELECT * FROM maintenance_logs WHERE asset_id = %s ORDER BY log_date DESC", (id,)); logs = cur.fetchall(); cur.close(); conn.close()
     return render_template('view.html', asset=asset, logs=logs)
 
-# --- 4. OTHERS (QR, Delete, Add, Users, Logs) ---
 @app.route('/qr/<int:id>')
 def qr_code(id):
     qr_url = url_for('view_asset', id=id, _external=True)
@@ -110,6 +113,7 @@ def delete_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(); cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
 
+# --- 4. NEW ENTRY, LOGS, USERS (Function 5, 6, 7) ---
 @app.route('/add', methods=['GET', 'POST'])
 def add():
     if 'user' not in session: return redirect(url_for('login'))
