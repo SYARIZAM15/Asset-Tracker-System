@@ -51,7 +51,7 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. USER MANAGEMENT (FIXED: EDIT & DELETE INCLUDED) ---
+# --- 2. USER MANAGEMENT (CREATE ADMINS, EDIT, DELETE) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -60,10 +60,11 @@ def manage_users():
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
         try:
+            # This allows creating both 'User' and 'Admin' roles
             cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", 
                         (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
             conn.commit()
-            flash("User added successfully!")
+            flash(f"Successfully created {request.form.get('role')} account!")
         except:
             conn.rollback()
             flash("Error: Username or Email already exists.")
@@ -75,16 +76,15 @@ def manage_users():
 @app.route('/admin/delete_user/<int:id>', methods=['POST'])
 def delete_user(id):
     if session.get('role') != 'Admin': return redirect(url_for('index'))
-    # Prevent admin from deleting themselves
     conn = get_db_connection(); cur = conn.cursor()
     cur.execute("SELECT username FROM users WHERE id = %s", (id,))
     user_to_del = cur.fetchone()
     if user_to_del and user_to_del[0] == session.get('user'):
-        flash("You cannot delete your own admin account!")
+        flash("You cannot delete yourself!")
     else:
         cur.execute("DELETE FROM users WHERE id = %s", (id,))
         conn.commit()
-        flash("User deleted successfully.")
+        flash("User removed.")
     cur.close(); conn.close()
     return redirect(url_for('manage_users'))
 
@@ -92,45 +92,30 @@ def delete_user(id):
 def edit_user(id):
     if session.get('role') != 'Admin': return redirect(url_for('index'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    
     if request.method == 'POST':
-        full_name = request.form.get('full_name')
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        role = request.form.get('role')
-        
-        if password: # If password field is not empty, update it
-            hashed_pw = generate_password_hash(password)
-            cur.execute("UPDATE users SET full_name=%s, username=%s, email=%s, password=%s, role=%s WHERE id=%s",
-                        (full_name, username, email, hashed_pw, role, id))
-        else: # Keep old password
-            cur.execute("UPDATE users SET full_name=%s, username=%s, email=%s, role=%s WHERE id=%s",
-                        (full_name, username, email, role, id))
-        
+        pw = request.form.get('password')
+        if pw:
+            hashed_pw = generate_password_hash(pw)
+            cur.execute("UPDATE users SET full_name=%s, username=%s, email=%s, password=%s, role=%s WHERE id=%s", (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), hashed_pw, request.form.get('role'), id))
+        else:
+            cur.execute("UPDATE users SET full_name=%s, username=%s, email=%s, role=%s WHERE id=%s", (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), request.form.get('role'), id))
         conn.commit(); cur.close(); conn.close()
-        flash("User updated successfully.")
-        return redirect(url_for('manage_users'))
-    
-    cur.execute("SELECT * FROM users WHERE id = %s", (id,))
-    target_user = cur.fetchone(); cur.close(); conn.close()
+        flash("User updated."); return redirect(url_for('manage_users'))
+    cur.execute("SELECT * FROM users WHERE id = %s", (id,)); target_user = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit_user.html', user=target_user)
 
-# --- 3. EXPORT, LOGS, ASSET ACTIONS ---
+# --- 3. EXPORT & ASSET ACTIONS ---
 @app.route('/export/excel')
 def export_excel():
     if 'user' not in session: return redirect(url_for('login'))
-    s, c = request.args.get('search', '').strip(), request.args.get('category', '').strip()
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    query = "SELECT tracking_number, asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets WHERE 1=1"
-    if session.get('role') != 'Admin': query += " AND is_deleted = FALSE"
-    cur.execute(query)
-    rows = cur.fetchall()
+    query = "SELECT tracking_number, asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets WHERE is_deleted = FALSE"
+    cur.execute(query); rows = cur.fetchall()
     df = pd.DataFrame(rows, columns=['Tracking ID', 'Category', 'Model', 'Serial', 'RAM', 'Storage', 'Location', 'Status'])
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
     output.seek(0)
-    return send_file(output, download_name="Inventory.xlsx", as_attachment=True)
+    return send_file(output, download_name="Inventory_2026.xlsx", as_attachment=True)
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
