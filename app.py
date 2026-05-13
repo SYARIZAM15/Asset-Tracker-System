@@ -51,38 +51,40 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. VIEW ASSET (FIXED: PUBLIC ACCESS FOR QR CODE) ---
-@app.route('/view/<int:id>')
-def view_asset(id):
-    # LOGIN CHECK REMOVED HERE SO QR SCAN WORKS IMMEDIATELY
-    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone()
-    if not asset: return "Asset Not Found", 404
-    cur.execute("SELECT * FROM maintenance_logs WHERE asset_id = %s ORDER BY log_date DESC", (id,))
-    logs = cur.fetchall(); cur.close(); conn.close()
-    return render_template('view.html', asset=asset, logs=logs)
-
-# --- 3. USER MANAGEMENT (FIXED: ERROR ON CLICK) ---
+# --- 2. USER MANAGEMENT (FIXED: ERROR ON CLICK) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
         try:
             cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", 
                         (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
             conn.commit()
-            flash("User Registered.")
+            flash("User Registered Successfully.")
         except:
             conn.rollback()
-            flash("Error: Username/Email exists.")
+            flash("Error: Username or Email already exists.")
     
-    # We fetch the data and pass it as 'users' so the template doesn't crash
+    # We query the users and pass them to the template as 'users'
     cur.execute("SELECT * FROM users ORDER BY id ASC")
-    users_list = cur.fetchall()
+    all_users = cur.fetchall()
     cur.close(); conn.close()
-    return render_template('manage_users.html', users=users_list)
+    
+    # Ensure the variable name 'users' matches what your HTML template uses in the loop
+    return render_template('manage_users.html', users=all_users)
+
+# --- 3. VIEW ASSET (PUBLIC ACCESSIBLE FOR QR) ---
+@app.route('/view/<int:id>')
+def view_asset(id):
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone()
+    if not asset: return "Asset Not Found", 404
+    cur.execute("SELECT * FROM maintenance_logs WHERE asset_id = %s ORDER BY log_date DESC", (id,))
+    logs = cur.fetchall(); cur.close(); conn.close()
+    return render_template('view.html', asset=asset, logs=logs)
 
 # --- 4. NEW ENTRY ---
 @app.route('/add', methods=['GET', 'POST'])
@@ -96,7 +98,7 @@ def add_asset():
         return redirect(url_for('index'))
     return render_template('add.html')
 
-# --- 5. EDIT, QR, DELETE & LOGS ---
+# --- 5. EDIT, DELETE & LOGS ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
@@ -114,13 +116,6 @@ def edit_asset(id):
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
 
-@app.route('/qr/<int:id>')
-def qr_code(id):
-    if 'user' not in session: return redirect(url_for('login'))
-    qr_url = url_for('view_asset', id=id, _external=True)
-    img = qrcode.make(qr_url); buf = io.BytesIO(); img.save(buf); qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-    return render_template('qr_display.html', qr_code=qr_b64)
-
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
@@ -131,6 +126,25 @@ def delete_asset(id):
 def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cur.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 500"); logs = cur.fetchall(); cur.close(); conn.close(); return render_template('login_logs.html', logs=logs)
+
+# --- 6. QR CODE & EXCEL ---
+@app.route('/qr/<int:id>')
+def qr_code(id):
+    if 'user' not in session: return redirect(url_for('login'))
+    qr_url = url_for('view_asset', id=id, _external=True)
+    img = qrcode.make(qr_url); buf = io.BytesIO(); img.save(buf); qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    return render_template('qr_display.html', qr_code=qr_b64)
+
+@app.route('/export/excel')
+def export_excel():
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT tracking_number, asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets WHERE is_deleted = FALSE")
+    df = pd.DataFrame(cur.fetchall(), columns=['Tracking ID', 'Category', 'Model', 'Serial', 'RAM', 'Storage', 'Location', 'Status'])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
+    output.seek(0)
+    return send_file(output, download_name="Inventory.xlsx", as_attachment=True)
 
 # --- AUTH ---
 @app.route('/login', methods=['GET', 'POST'])
