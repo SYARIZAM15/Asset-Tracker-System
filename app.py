@@ -15,25 +15,25 @@ def get_db_connection():
 # --- DATABASE INITIALIZATION ---
 def init_db():
     conn = get_db_connection(); cur = conn.cursor()
-    # 1. Assets Table
+    # Assets Table
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT, 
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, 
         status TEXT, is_deleted BOOLEAN DEFAULT FALSE);''')
     
-    # 2. NEW: Maintenance Logs Table (For Repairs/Upgrades)
+    # Maintenance Logs Table (THE FIX: This stores the "Problem Reports")
     cur.execute('''CREATE TABLE IF NOT EXISTS maintenance_logs (
         id SERIAL PRIMARY KEY, asset_id INTEGER REFERENCES assets(id), 
         action_type TEXT, comment TEXT, updated_by TEXT, log_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
     
-    # 3. Users & Login Logs
     cur.execute('''CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, 
         email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
+    
     cur.execute('''CREATE TABLE IF NOT EXISTS login_logs (
         id SERIAL PRIMARY KEY, full_name TEXT, email TEXT, login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
     
-    # Column check for older databases
+    # Check for soft delete column
     cur.execute("SELECT count(*) FROM information_schema.columns WHERE table_name='assets' AND column_name='is_deleted';")
     if cur.fetchone()[0] == 0: cur.execute("ALTER TABLE assets ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE;")
     
@@ -41,7 +41,7 @@ def init_db():
 
 init_db()
 
-# --- DASHBOARD & SEARCH ---
+# --- 1. DASHBOARD & SEARCH ---
 @app.route('/')
 def index():
     if 'user' not in session: return redirect(url_for('login'))
@@ -61,43 +61,44 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- EDIT WITH MAINTENANCE LOGGING ---
+# --- 2. EDIT (FIXED: Saves Problem Reports) ---
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
-        # 1. Update Asset Spec
+        # Update Asset Info
         cur.execute("""UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, 
                        storage_type=%s, location=%s, status=%s WHERE id=%s""", 
                     (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), 
                      request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
         
-        # 2. Add Maintenance Record (If comment provided)
+        # Save Maintenance Log (Problem Report)
+        action = request.form.get('action_type')
         comment = request.form.get('comment', '').strip()
         if comment:
             cur.execute("""INSERT INTO maintenance_logs (asset_id, action_type, comment, updated_by) 
                            VALUES (%s, %s, %s, %s)""", 
-                        (id, request.form.get('action_type'), comment, session.get('full_name')))
+                        (id, action, comment, session.get('full_name')))
         
         conn.commit(); cur.close(); conn.close()
-        flash("Update & History saved!"); return redirect(url_for('index'))
+        flash("Asset and Maintenance Log updated!"); return redirect(url_for('index'))
     
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
 
-# --- VIEW WITH MAINTENANCE HISTORY ---
+# --- 3. VIEW (FIXED: Shows Problem Reports History) ---
 @app.route('/view/<int:id>')
 def view_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone()
-    # Fetch all comments for this asset
+    # Fetch all Maintenance/Problem reports for this asset
     cur.execute("SELECT * FROM maintenance_logs WHERE asset_id = %s ORDER BY log_date DESC", (id,))
     logs = cur.fetchall(); cur.close(); conn.close()
     return render_template('view.html', asset=asset, logs=logs)
 
-# --- OTHERS (QR, DELETE, ADD, USERS, LOGS) ---
+# --- 4. OTHERS (QR, Delete, Add, Users, Logs) ---
 @app.route('/qr/<int:id>')
 def qr_code(id):
     qr_url = url_for('view_asset', id=id, _external=True)
