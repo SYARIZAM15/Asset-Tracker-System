@@ -1,5 +1,5 @@
-import os, io, qrcode, base64, psycopg2, psycopg2.extras
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+import os, io, qrcode, base64, psycopg2, psycopg2.extras, pandas as pd
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 
@@ -18,12 +18,12 @@ def init_db():
     cur.execute('''CREATE TABLE IF NOT EXISTS assets (
         id SERIAL PRIMARY KEY, asset_type TEXT, tracking_number TEXT, cpu_name TEXT, 
         serial_number TEXT UNIQUE, ram_size TEXT, storage_type TEXT, location TEXT, 
-        status TEXT, is_deleted BOOLEAN DEFAULT FALSE);''');
+        status TEXT, is_deleted BOOLEAN DEFAULT FALSE);''')
     cur.execute('''CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, full_name TEXT, username TEXT UNIQUE NOT NULL, 
-        email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''');
+        email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'User');''')
     cur.execute('''CREATE TABLE IF NOT EXISTS login_logs (
-        id SERIAL PRIMARY KEY, full_name TEXT, email TEXT, login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''');
+        id SERIAL PRIMARY KEY, full_name TEXT, email TEXT, login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
     conn.commit(); cur.close(); conn.close()
 
 init_db()
@@ -35,8 +35,8 @@ def index():
     s, c = request.args.get('search', '').strip(), request.args.get('category', '').strip()
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     query = "SELECT * FROM assets WHERE 1=1"
-    if session.get('role') != 'Admin': query += " AND is_deleted = FALSE"
     params = []
+    if session.get('role') != 'Admin': query += " AND is_deleted = FALSE"
     if s:
         query += " AND (serial_number ILIKE %s OR tracking_number ILIKE %s OR cpu_name ILIKE %s)"
         params.extend([f'%{s}%', f'%{s}%', f'%{s}%'])
@@ -48,64 +48,85 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. USER MANAGEMENT (FIXED & ADDED EDIT/DELETE) ---
-@app.route('/admin/users', methods=['GET', 'POST'])
-def manage_users():
-    if session.get('role') != 'Admin': return redirect(url_for('index'))
+# --- 2. EXCEL EXPORT (FIXED ROUTE) ---
+@app.route('/export/excel')
+def export_excel():
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT tracking_number, asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets WHERE is_deleted = FALSE")
+    df = pd.DataFrame(cur.fetchall(), columns=['Tracking ID', 'Category', 'Model', 'Serial', 'RAM', 'Storage', 'Location', 'Status'])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
+    output.seek(0)
+    return send_file(output, download_name="JTDI_Inventory.xlsx", as_attachment=True)
+
+# --- 3. NEW ENTRY (FIXED ROUTE) ---
+@app.route('/add', methods=['GET', 'POST'])
+def add_asset():
+    if 'user' not in session: return redirect(url_for('login'))
+    if request.method == 'POST':
+        conn = get_db_connection(); cur = conn.cursor()
+        t = f"JTDI-{datetime.now().strftime('%y%m%H%M%S')}"
+        cur.execute("INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location, is_deleted) VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE)", (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location')))
+        conn.commit(); cur.close(); conn.close()
+        return redirect(url_for('index'))
+    return render_template('add.html')
+
+# --- 4. EDIT, VIEW, DELETE (FIXED ROUTES) ---
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
-        pw = generate_password_hash(request.form.get('password'))
-        try:
-            cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", 
-                        (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
-            conn.commit(); flash("User created!")
-        except:
-            conn.rollback(); flash("Error: Email/Username exists.")
-    cur.execute("SELECT * FROM users ORDER BY id ASC")
-    users_data = cur.fetchall()
-    cur.close(); conn.close()
-    return render_template('manage_users.html', users=users_data)
+        cur.execute("UPDATE assets SET asset_type=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s WHERE id=%s", (request.form.get('asset_type'), request.form.get('cpu_name'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
+        conn.commit(); cur.close(); conn.close()
+        return redirect(url_for('index'))
+    cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
+    return render_template('edit.html', asset=asset)
 
-@app.route('/admin/edit_user/<int:id>', methods=['GET', 'POST'])
-def edit_user(id):
-    if session.get('role') != 'Admin': return redirect(url_for('index'))
-    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    if request.method == 'POST':
-        full_name, email, role = request.form.get('full_name'), request.form.get('email'), request.form.get('role')
-        password = request.form.get('password')
-        if password:
-            hashed_pw = generate_password_hash(password)
-            cur.execute("UPDATE users SET full_name=%s, email=%s, role=%s, password=%s WHERE id=%s", (full_name, email, role, hashed_pw, id))
-        else:
-            cur.execute("UPDATE users SET full_name=%s, email=%s, role=%s WHERE id=%s", (full_name, email, role, id))
-        conn.commit(); cur.close(); conn.close(); flash("User updated!"); return redirect(url_for('manage_users'))
-    cur.execute("SELECT * FROM users WHERE id = %s", (id,)); user = cur.fetchone(); cur.close(); conn.close()
-    return render_template('edit_user.html', user=user)
-
-@app.route('/admin/delete_user/<int:id>', methods=['POST'])
-def delete_user(id):
-    if session.get('role') != 'Admin': return redirect(url_for('index'))
-    conn = get_db_connection(); cur = conn.cursor()
-    cur.execute("DELETE FROM users WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close()
-    flash("User deleted!"); return redirect(url_for('manage_users'))
-
-# --- 3. OTHER CORE FUNCTIONS ---
 @app.route('/view/<int:id>')
 def view_asset(id):
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('view.html', asset=asset)
 
+@app.route('/delete/<int:id>', methods=['POST'])
+def delete_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection(); cur = conn.cursor(); cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('index'))
+
+# --- 5. LOGS & USER MGMT (FIXED ROUTES) ---
+@app.route('/admin/logs')
+def view_logs():
+    if session.get('role') != 'Admin': return redirect(url_for('index'))
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 500")
+    logs_data = cur.fetchall(); cur.close(); conn.close()
+    return render_template('login_logs.html', logs=logs_data)
+
+@app.route('/admin/users', methods=['GET', 'POST'])
+def manage_users():
+    if session.get('role') != 'Admin': return redirect(url_for('index'))
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    if request.method == 'POST':
+        pw = generate_password_hash(request.form.get('password'))
+        cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
+        conn.commit()
+    cur.execute("SELECT * FROM users ORDER BY id ASC")
+    users_data = cur.fetchall(); cur.close(); conn.close()
+    return render_template('manage_users.html', users=users_data)
+
+# --- AUTH ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email').lower()
-        conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-        u = cur.fetchone()
-        if u and check_password_hash(u['password'], request.form.get('password')):
-            session.update({'user': u['username'], 'role': u['role'], 'full_name': u['full_name']})
-            return redirect(url_for('index'))
+        session.clear()
+        email = request.form.get('email', '').strip().lower()
+        conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user = cur.fetchone()
+        if user and check_password_hash(user['password'], request.form.get('password')):
+            session.update({'user': user['username'], 'role': user['role'], 'full_name': user['full_name']}); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     return render_template('login.html')
 
 @app.route('/logout')
