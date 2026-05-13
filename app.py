@@ -31,7 +31,7 @@ def init_db():
 
 init_db()
 
-# --- 1. DASHBOARD & SEARCH (Functions 1, 2, 3) ---
+# --- 1. DASHBOARD & SEARCH ---
 @app.route('/')
 def index():
     if 'user' not in session: return redirect(url_for('login'))
@@ -47,18 +47,11 @@ def index():
         query += " AND asset_type = %s"; params.append(c)
     cur.execute(query + " ORDER BY id DESC", tuple(params))
     data = cur.fetchall()
-    
-    # Dashboard Totals
-    stats = {
-        'total': len(data),
-        'working': len([r for r in data if r['status'] == 'Working']),
-        'maint': len([r for r in data if r['status'] == 'Maintenance']),
-        'faulty': len([r for r in data if r['status'] == 'Faulty'])
-    }
+    stats = {'total': len(data), 'working': len([r for r in data if r['status'] == 'Working']), 'maint': len([r for r in data if r['status'] == 'Maintenance']), 'faulty': len([r for r in data if r['status'] == 'Faulty'])}
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. ASSET ACTIONS (Functions 4 & 5) ---
+# --- 2. ASSET ACTIONS (FIXED LINKS) ---
 @app.route('/view/<int:id>')
 def view_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
@@ -69,31 +62,20 @@ def view_asset(id):
     return render_template('view.html', asset=asset, logs=logs)
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
-def edit(id):
+def edit_asset(id):
     if 'user' not in session: return redirect(url_for('login'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     if request.method == 'POST':
-        cur.execute("""UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, storage_type=%s, location=%s, status=%s WHERE id=%s""", 
-                    (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
+        cur.execute("""UPDATE assets SET asset_type=%s, tracking_number=%s, cpu_name=%s, ram_size=%s, 
+                       storage_type=%s, location=%s, status=%s WHERE id=%s""", 
+                    (request.form.get('asset_type'), request.form.get('tracking_number'), request.form.get('cpu_name'), 
+                     request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('location'), request.form.get('status'), id))
         if request.form.get('comment'):
-            cur.execute("INSERT INTO maintenance_logs (asset_id, action_type, comment, updated_by) VALUES (%s, %s, %s, %s)", (id, request.form.get('action_type'), request.form.get('comment'), session.get('full_name')))
+            cur.execute("INSERT INTO maintenance_logs (asset_id, action_type, comment, updated_by) VALUES (%s, %s, %s, %s)", 
+                        (id, request.form.get('action_type'), request.form.get('comment'), session.get('full_name')))
         conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
     cur.execute("SELECT * FROM assets WHERE id = %s", (id,)); asset = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit.html', asset=asset)
-
-@app.route('/add', methods=['GET', 'POST'])
-def add():
-    if 'user' not in session: return redirect(url_for('login'))
-    if request.method == 'POST':
-        conn = get_db_connection(); cur = conn.cursor()
-        t = f"JTDI-{datetime.now().strftime('%y%m%H%M%S')}"
-        cur.execute("INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location'))); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
-    return render_template('add.html')
-
-@app.route('/delete/<int:id>', methods=['POST'])
-def delete_asset(id):
-    if 'user' not in session: return redirect(url_for('login'))
-    conn = get_db_connection(); cur = conn.cursor(); cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
 
 @app.route('/qr/<int:id>')
 def qr_code(id):
@@ -101,7 +83,22 @@ def qr_code(id):
     img = qrcode.make(qr_url); buf = io.BytesIO(); img.save(buf); qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
     return render_template('qr_display.html', qr_code=qr_b64)
 
-# --- 3. ADMIN TOOLS (Functions 6 & 7) ---
+@app.route('/delete/<int:id>', methods=['POST'])
+def delete_asset(id):
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection(); cur = conn.cursor(); cur.execute("UPDATE assets SET is_deleted = TRUE WHERE id = %s", (id,)); conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('index'))
+
+@app.route('/add', methods=['GET', 'POST'])
+def add_asset():
+    if 'user' not in session: return redirect(url_for('login'))
+    if request.method == 'POST':
+        conn = get_db_connection(); cur = conn.cursor()
+        t = f"JTDI-{datetime.now().strftime('%y%m%H%M%S')}"
+        cur.execute("INSERT INTO assets (asset_type, tracking_number, cpu_name, serial_number, ram_size, storage_type, status, location) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", (request.form.get('asset_type'), t, request.form.get('cpu_name'), request.form.get('serial_number'), request.form.get('ram_size'), request.form.get('storage_type'), request.form.get('status'), request.form.get('location'))); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
+    return render_template('add.html')
+
+# --- 3. ADMIN TOOLS (FIXED LINKS) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
@@ -116,7 +113,19 @@ def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cur.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 500"); logs = cur.fetchall(); cur.close(); conn.close(); return render_template('login_logs.html', logs=logs)
 
-# --- AUTH ---
+# --- 4. EXCEL EXPORT ---
+@app.route('/export/excel')
+def export_excel():
+    if 'user' not in session: return redirect(url_for('login'))
+    conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT tracking_number, asset_type, cpu_name, serial_number, ram_size, storage_type, location, status FROM assets WHERE is_deleted = FALSE")
+    df = pd.DataFrame(cur.fetchall(), columns=['Tracking ID', 'Category', 'Model', 'Serial', 'RAM', 'Storage', 'Location', 'Status'])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
+    output.seek(0)
+    return send_file(output, download_name="JTDI_Inventory.xlsx", as_attachment=True)
+
+# --- 5. AUTH ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
