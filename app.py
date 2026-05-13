@@ -31,7 +31,43 @@ def init_db():
 
 init_db()
 
-# --- 1. DASHBOARD & ASSETS ---
+# --- 1. LOGIN (FIXED: Handles multiple admins & clears session cache) ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        # Clear any existing session before logging in a new user
+        session.clear() 
+        
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        
+        conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user = cur.fetchone()
+        
+        if user and check_password_hash(user['password'], password):
+            # Explicitly set session data for the NEWLY logged-in user
+            session.permanent = True
+            session['user'] = user['username']
+            session['role'] = user['role']
+            session['full_name'] = user['full_name']
+            session['email'] = user['email']
+            
+            # Log this specific login
+            cur.execute("INSERT INTO login_logs (full_name, email) VALUES (%s, %s)", 
+                        (user['full_name'], user['email']))
+            conn.commit()
+            cur.close(); conn.close()
+            
+            flash(f"Welcome back, {user['full_name']} ({user['role']})")
+            return redirect(url_for('index'))
+        else:
+            flash("Invalid email or password.")
+            cur.close(); conn.close()
+            
+    return render_template('login.html')
+
+# --- 2. DASHBOARD & SEARCH ---
 @app.route('/')
 def index():
     if 'user' not in session: return redirect(url_for('login'))
@@ -51,42 +87,24 @@ def index():
     cur.close(); conn.close()
     return render_template('assets.html', data=data, **stats, s_query=s, c_filter=c)
 
-# --- 2. USER MANAGEMENT (CREATE ADMINS, EDIT, DELETE) ---
+# --- 3. USER MANAGEMENT (CREATE ADMINS, EDIT, DELETE) ---
 @app.route('/admin/users', methods=['GET', 'POST'])
 def manage_users():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    
     if request.method == 'POST':
         pw = generate_password_hash(request.form.get('password'))
         try:
-            # This allows creating both 'User' and 'Admin' roles
             cur.execute("INSERT INTO users (full_name, username, email, password, role) VALUES (%s,%s,%s,%s,%s)", 
                         (request.form.get('full_name'), request.form.get('username'), request.form.get('email'), pw, request.form.get('role')))
             conn.commit()
-            flash(f"Successfully created {request.form.get('role')} account!")
+            flash(f"New {request.form.get('role')} created.")
         except:
             conn.rollback()
-            flash("Error: Username or Email already exists.")
-            
+            flash("Error: Username or email already exists.")
     cur.execute("SELECT * FROM users ORDER BY id ASC")
     users = cur.fetchall(); cur.close(); conn.close()
     return render_template('manage_users.html', users=users)
-
-@app.route('/admin/delete_user/<int:id>', methods=['POST'])
-def delete_user(id):
-    if session.get('role') != 'Admin': return redirect(url_for('index'))
-    conn = get_db_connection(); cur = conn.cursor()
-    cur.execute("SELECT username FROM users WHERE id = %s", (id,))
-    user_to_del = cur.fetchone()
-    if user_to_del and user_to_del[0] == session.get('user'):
-        flash("You cannot delete yourself!")
-    else:
-        cur.execute("DELETE FROM users WHERE id = %s", (id,))
-        conn.commit()
-        flash("User removed.")
-    cur.close(); conn.close()
-    return redirect(url_for('manage_users'))
 
 @app.route('/admin/edit_user/<int:id>', methods=['GET', 'POST'])
 def edit_user(id):
@@ -104,7 +122,7 @@ def edit_user(id):
     cur.execute("SELECT * FROM users WHERE id = %s", (id,)); target_user = cur.fetchone(); cur.close(); conn.close()
     return render_template('edit_user.html', user=target_user)
 
-# --- 3. EXPORT & ASSET ACTIONS ---
+# --- 4. EXPORT & ASSET ACTIONS ---
 @app.route('/export/excel')
 def export_excel():
     if 'user' not in session: return redirect(url_for('login'))
@@ -115,7 +133,7 @@ def export_excel():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
     output.seek(0)
-    return send_file(output, download_name="Inventory_2026.xlsx", as_attachment=True)
+    return send_file(output, download_name="Inventory_Export.xlsx", as_attachment=True)
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
@@ -161,16 +179,6 @@ def add():
 def view_logs():
     if session.get('role') != 'Admin': return redirect(url_for('index'))
     conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cur.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 500"); logs = cur.fetchall(); cur.close(); conn.close(); return render_template('login_logs.html', logs=logs)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        conn = get_db_connection(); cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor); cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-        user = cur.fetchone()
-        if user and check_password_hash(user['password'], request.form.get('password')):
-            session.update({'user': user['username'], 'role': user['role'], 'full_name': user['full_name']}); cur.execute("INSERT INTO login_logs (full_name, email) VALUES (%s, %s)", (user['full_name'], user['email'])); conn.commit(); cur.close(); conn.close(); return redirect(url_for('index'))
-    return render_template('login.html')
 
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login'))
